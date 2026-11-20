@@ -20,7 +20,7 @@ const defaultConfig = {
   port: 5240,
   signalingServerUrl: 'https://cast.homaklab.com',
   deviceName: 'Homak Cast Receiver',
-  requireApproval: true,
+  requireApproval: false, // Default: no approval needed (connects immediately), can be enabled in settings
   autoStartOnBoot: false,
   targetDisplayId: null, // null = primary display
   audioOutputId: 'default',

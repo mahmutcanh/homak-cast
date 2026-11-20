@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, screen, ipcMain, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, screen, ipcMain, nativeImage, session, desktopCapturer } = require('electron');
 const path = require('path');
 const SignalingServer = require('./server/signaling-server');
 const { loadSettings, saveSettings, getNetworkAddresses } = require('./server/config');
@@ -276,6 +276,15 @@ ipcMain.handle('get-network-addresses', () => {
   return getNetworkAddresses();
 });
 
+ipcMain.handle('get-screen-sources', async () => {
+  const sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 320, height: 180 } });
+  return sources.map(s => ({
+    id: s.id,
+    name: s.name,
+    thumbnail: s.thumbnail.toDataURL()
+  }));
+});
+
 ipcMain.handle('toggle-auto-start', (event, enabled) => {
   app.setLoginItemSettings({ openAtLogin: enabled });
   settings.autoStartOnBoot = enabled;
@@ -301,6 +310,22 @@ function registerScreenEvents() {
 
 // App lifecycle
 app.whenReady().then(async () => {
+  // Configure display media handler for screen casting
+  if (session.defaultSession.setDisplayMediaRequestHandler) {
+    session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+      desktopCapturer.getSources({ types: ['screen', 'window'] }).then((sources) => {
+        if (sources.length > 0) {
+          callback({ video: sources[0], audio: 'loopback' });
+        } else {
+          callback({});
+        }
+      }).catch(err => {
+        console.error('Display media request error:', err);
+        callback({});
+      });
+    });
+  }
+
   // 1. Start embedded Signaling & Web Sender Server
   signalingServer = new SignalingServer({ port: settings.port || 5240 });
   try {

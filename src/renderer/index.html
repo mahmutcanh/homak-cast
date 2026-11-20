@@ -17,7 +17,17 @@
     <header class="top-nav">
       <div class="nav-brand">
         <div class="brand-badge">HOMAK</div>
-        <div class="brand-title">CAST <span>RECEIVER</span></div>
+        <div class="brand-title">CAST</div>
+
+        <!-- Mode Switcher Tabs -->
+        <div class="mode-tabs">
+          <button id="tabReceiverMode" class="tab-btn active">
+            <span>📺</span> Alıcı (Bu Ekran)
+          </button>
+          <button id="tabSenderMode" class="tab-btn">
+            <span>⚡</span> Ekranımı Yansıt
+          </button>
+        </div>
       </div>
 
       <div class="nav-actions">
@@ -89,6 +99,64 @@
           <div class="spec-item"><span class="dot-live"></span> Düşük Gecikmeli WebRTC</div>
           <div class="spec-item"><span class="dot-live"></span> HDMI & Çoklu Ekran Desteği</div>
           <div class="spec-item"><span class="dot-live"></span> Çapraz Ağ & VLAN Geçişi</div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 1B. DESKTOP SENDER VIEW (Cast this PC's screen to a 6-digit code) -->
+    <main id="desktopSenderView" class="view-sender" style="display: none;">
+      <div class="sender-container card">
+        <div class="sender-hero">
+          <div class="sender-icon-box">⚡</div>
+          <h2>Ekranınızı Başka Bir Ekrana Yansıtın</h2>
+          <p class="subtitle">TV, Projeksiyon veya Alıcı ekranda görünen 6 haneli kodu girin ve yayını başlatın.</p>
+        </div>
+
+        <form id="desktopCastForm" onsubmit="return false;">
+          <div class="sender-pin-box">
+            <input type="text" id="desktopPinInput" maxlength="6" inputmode="numeric" placeholder="123456" autocomplete="off" autofocus>
+          </div>
+
+          <div class="sender-settings-grid">
+            <div class="form-group">
+              <label for="desktopSourceSelect">Paylaşılacak Ekran / Pencere:</label>
+              <select id="desktopSourceSelect" class="form-input"></select>
+            </div>
+
+            <div class="form-group">
+              <label for="desktopFpsSelect">Kare Hızı (FPS):</label>
+              <select id="desktopFpsSelect" class="form-input">
+                <option value="60" selected>60 FPS (Ultra Akıcı)</option>
+                <option value="30">30 FPS (Standart)</option>
+              </select>
+            </div>
+
+            <div class="form-group checkbox-group" style="grid-column: span 2;">
+              <input type="checkbox" id="desktopAudioToggle" checked>
+              <label for="desktopAudioToggle">Sistem Sesini de Karşı Ekrana Aktar (Hoparlör / Müzik / Video)</label>
+            </div>
+          </div>
+
+          <div id="desktopCastError" class="alert alert-error" style="display: none;"></div>
+          <div id="desktopCastInfo" class="alert alert-info" style="display: none;"></div>
+
+          <button id="startDesktopCastBtn" class="btn btn-primary btn-block btn-lg">
+            <span>⚡</span> Bu Koda Ekranımı Yansıt
+          </button>
+        </form>
+
+        <!-- Outgoing Stream Active Bar -->
+        <div id="desktopActiveStreamBox" style="display: none;">
+          <div class="active-stream-badge">
+            <span class="dot-live"></span> EKRANINIZ CANLI YANSITILIYOR
+          </div>
+          <p class="card-hint">Ekranınız ve sesiniz seçilen alıcı ekranda 60 FPS olarak görüntüleniyor.</p>
+          <div class="active-stream-preview">
+            <video id="desktopPreviewVideo" autoplay playsinline muted></video>
+          </div>
+          <button id="stopDesktopCastBtn" class="btn btn-danger btn-block btn-lg">
+            <span>⏹</span> Yayını Durdur
+          </button>
         </div>
       </div>
     </main>

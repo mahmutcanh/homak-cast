@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#00f0ff">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/png" href="/assets/icon.png">
+  <link rel="apple-touch-icon" href="/assets/icon.png">
   <title>Homak Cast — Ekranını Yansıt</title>
   <link rel="stylesheet" href="/sender.css">
   <script src="/socket.io/socket.io.js"></script>
@@ -20,8 +24,8 @@
         </div>
       </div>
       <div class="header-right">
-        <a href="/download" class="btn-download-top" title="Windows Alıcı Uygulamasını İndir (Portable EXE)">
-          <span>⬇️</span> Alıcıyı İndir (.exe)
+        <a href="/download" id="topDownloadBtn" class="btn-download-top" title="Uygulamayı İndir">
+          <span>⬇️</span> İndir
         </a>
         <div id="connectionStatusBadge" class="badge badge-disconnected">Sunucuya Bağlanıyor...</div>
       </div>
@@ -32,6 +36,11 @@
       <section id="pairingSection" class="card">
         <h2>Ekranını Alıcıya Bağla</h2>
         <p class="subtitle">Alıcı ekranındaki 6 haneli eşleştirme kodunu girin veya QR kodu okutun.</p>
+
+        <!-- Detected Device Indicator Badge -->
+        <div id="detectedDeviceBadge" class="detected-device-badge">
+          <span class="device-icon">📱</span> Cihazınız algılanıyor...
+        </div>
 
         <form id="pinForm" onsubmit="return false;">
           <div class="pin-input-container">
@@ -64,22 +73,38 @@
           </button>
         </form>
 
-        <!-- Receiver EXE Download Box -->
+        <!-- Device-specific Dynamic Download Card -->
         <div class="download-box">
           <div class="download-box-content">
-            <div class="download-box-icon">🖥️</div>
+            <div id="downloadCardIcon" class="download-box-icon">💻</div>
             <div class="download-box-text">
-              <strong>Bu bilgisayarı Alıcı (Receiver) mı yapmak istiyorsunuz?</strong>
-              <p>Projeksiyon veya TV'ye bağlı Windows bilgisayarda çalıştırmak için alıcıyı indirin.</p>
+              <strong id="downloadCardTitle">Cihazınıza Özel Alıcı / Uygulama</strong>
+              <p id="downloadCardDesc">Cihazınıza özel uygulamayı indirerek daha hızlı ekran yansıtma ve alıcı desteği sağlayın.</p>
             </div>
           </div>
-          <a href="/download" class="btn btn-secondary btn-download" download="Homak-Cast-Receiver.exe">
-            <span>📥</span> Windows Receiver İndir (.exe)
+          <a href="/download" id="downloadCardLink" class="btn btn-secondary btn-download">
+            <span>📥</span> Uygulamayı İndir
           </a>
+
+          <!-- Manual Platform Selector -->
+          <div class="manual-downloads">
+            <span class="manual-downloads-title">Farklı bir işletim sistemi için indirin:</span>
+            <div class="platform-chips">
+              <a href="/download" class="platform-chip" download="Homak-Cast-Receiver.exe">
+                <span>💻</span> Windows (.exe)
+              </a>
+              <a href="/download/android" class="platform-chip" download="Homak-Cast.apk">
+                <span>📱</span> Android (.apk)
+              </a>
+              <a href="/" class="platform-chip">
+                <span>🌐</span> Web / Mac / iOS
+              </a>
+            </div>
+          </div>
         </div>
       </section>
 
-      <!-- 2. Waiting for Approval Screen -->
+      <!-- 2. Waiting for Approval Screen (Active only if approval mode is enabled) -->
       <section id="approvalSection" class="card" style="display: none;">
         <div class="spinner"></div>
         <h2>Alıcıdan Onay Bekleniyor...</h2>

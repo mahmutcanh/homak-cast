@@ -167,6 +167,16 @@ class SignalingServer {
       });
     });
 
+    // Android APK download endpoint
+    this.app.get(['/download/android', '/download/apk', '/Homak-Cast.apk'], (req, res) => {
+      const apkPath = path.join(__dirname, 'public', 'downloads', 'Homak-Cast.apk');
+      res.download(apkPath, 'Homak-Cast.apk', (err) => {
+        if (err && !res.headersSent) {
+          res.status(404).send('Android APK paketi bulunamadı.');
+        }
+      });
+    });
+
     // Fallback route to web sender
     this.app.get('*', (req, res) => {
       res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -250,6 +260,8 @@ class SignalingServer {
           socketId: socket.id,
           ip: clientIp,
           deviceName: data.deviceName || 'Web Tarayıcı',
+          model: data.model || 'Bilinmeyen Model',
+          os: data.os || 'Bilinmeyen İşletim Sistemi',
           browser: data.browser || 'Bilinmeyen Cihaz'
         };
 

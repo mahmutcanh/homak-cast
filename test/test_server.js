@@ -4,7 +4,7 @@ const SignalingServer = require('../server/signaling-server');
 
 async function runTests() {
   console.log('--- HOMAK CAST INTEGRATION TESTS STARTING ---');
-  
+
   const testPort = 5299;
   const server = new SignalingServer({ port: testPort });
   await server.start();
@@ -25,7 +25,7 @@ async function runTests() {
 
     await new Promise((resolve) => {
       receiverSocket.on('connect', () => {
-        receiverSocket.emit('register-receiver', {}, (res) => {
+        receiverSocket.emit('register-receiver', { deviceName: 'Test Living Room TV' }, (res) => {
           assert.strictEqual(res.ok, true);
           assert.strictEqual(typeof res.pin, 'string');
           assert.strictEqual(res.pin.length, 6, 'PIN must be exactly 6 digits');
@@ -49,7 +49,7 @@ async function runTests() {
     let rateLimitTriggered = false;
     for (let i = 0; i < 6; i++) {
       await new Promise((resolve) => {
-        badSenderSocket.emit('request-pairing', { pin: '000000', deviceName: 'Test Bad Actor' }, (res) => {
+        badSenderSocket.emit('request-pairing', { pin: '000000', deviceName: 'Bad Actor' }, (res) => {
           if (!res.ok && res.error.includes('bekleyin')) {
             rateLimitTriggered = true;
           }
@@ -61,61 +61,92 @@ async function runTests() {
     console.log('[PASS] Brute-force rate limiting verified.');
     badSenderSocket.disconnect();
 
-    // 5. Valid Sender Pairing with Approval Flow
-    const goodSenderSocket = io(serverUrl);
-    await new Promise((resolve) => goodSenderSocket.on('connect', resolve));
+    // 5. DIRECT PAIRING TEST (requireApproval = false by default)
+    const directSenderSocket = io(serverUrl);
+    await new Promise((resolve) => directSenderSocket.on('connect', resolve));
 
-    // Listen for approval request on receiver
-    const approvalPromise = new Promise((resolve) => {
-      receiverSocket.on('approval-request', ({ senderId, senderInfo }) => {
-        console.log(`[PASS] Receiver received approval request from: ${senderInfo.deviceName}`);
-        // Approve it!
-        receiverSocket.emit('approval-decision', { senderId, approved: true });
+    server.resetRateLimit('127.0.0.1');
+
+    const receiverConnectedPromise = new Promise((resolve) => {
+      receiverSocket.once('sender-connected', ({ senderInfo }) => {
+        assert.strictEqual(senderInfo.model, 'Samsung Galaxy S23');
+        assert.strictEqual(senderInfo.os, 'Android');
+        console.log(`[PASS] Receiver directly connected without prompt! Detected Model: ${senderInfo.model} (${senderInfo.os})`);
         resolve();
       });
     });
 
-    const pairingPromise = new Promise((resolve) => {
-      goodSenderSocket.on('pairing-approved', (config) => {
+    const senderApprovedPromise = new Promise((resolve) => {
+      directSenderSocket.on('pairing-approved', (config) => {
         assert.ok(config.iceServers.length > 0, 'ICE servers must be provided');
-        console.log('[PASS] Sender received pairing approval and ICE servers.');
+        console.log('[PASS] Sender directly approved and received ICE servers immediately.');
         resolve();
       });
     });
 
-    // Sender requests pairing
-    server.resetRateLimit('127.0.0.1'); // clear rate limit for good test
-    goodSenderSocket.emit('request-pairing', { pin: initialPin, deviceName: 'Test Sender Laptop' });
+    directSenderSocket.emit('request-pairing', {
+      pin: initialPin,
+      deviceName: 'Samsung Galaxy S23 (Chrome)',
+      model: 'Samsung Galaxy S23',
+      os: 'Android',
+      browser: 'Chrome Mobile'
+    });
 
-    await Promise.all([approvalPromise, pairingPromise]);
+    await Promise.all([receiverConnectedPromise, senderApprovedPromise]);
 
     // 6. Check PIN invalidation (Code should now be invalid while in use)
     const intruderSocket = io(serverUrl);
     await new Promise((resolve) => intruderSocket.on('connect', resolve));
     await new Promise((resolve) => {
       intruderSocket.emit('request-pairing', { pin: initialPin }, (res) => {
-        assert.strictEqual(res.ok, false, 'Invalidated PIN should be rejected');
-        console.log('[PASS] Active PIN invalidation verified (code cannot be reused).');
+        assert.strictEqual(res.ok, false, 'In-use PIN should be rejected');
+        console.log('[PASS] In-use PIN protection verified.');
         resolve();
       });
     });
     intruderSocket.disconnect();
 
     // 7. Stream Termination & New PIN Generation
+    let newPin = null;
     const newPinPromise = new Promise((resolve) => {
       receiverSocket.on('pin-update', ({ pin }) => {
         assert.strictEqual(pin.length, 6);
         assert.notStrictEqual(pin, initialPin, 'New PIN must be different from previous PIN');
+        newPin = pin;
         console.log(`[PASS] Stream terminated. Brand new PIN generated: ${pin}`);
         resolve();
       });
     });
 
-    // Sender stops stream
-    goodSenderSocket.emit('stop-stream');
+    directSenderSocket.emit('stop-stream');
     await newPinPromise;
+    directSenderSocket.disconnect();
 
-    goodSenderSocket.disconnect();
+    // 8. APPROVAL MODE TEST (when enabled in settings)
+    server.settings.requireApproval = true;
+    console.log('[INFO] Testing approval mode enabled in settings...');
+
+    const promptSenderSocket = io(serverUrl);
+    await new Promise((resolve) => promptSenderSocket.on('connect', resolve));
+
+    const approvalPromptPromise = new Promise((resolve) => {
+      receiverSocket.once('approval-request', ({ senderId, senderInfo }) => {
+        console.log(`[PASS] Approval prompt received on receiver for: ${senderInfo.deviceName}`);
+        receiverSocket.emit('approval-decision', { senderId, approved: true });
+        resolve();
+      });
+    });
+
+    promptSenderSocket.emit('request-pairing', {
+      pin: newPin,
+      deviceName: 'Windows 11 Laptop',
+      model: 'ThinkPad X1',
+      os: 'Windows',
+      browser: 'Edge'
+    });
+
+    await approvalPromptPromise;
+    promptSenderSocket.disconnect();
     receiverSocket.disconnect();
 
     console.log('\n=============================================');

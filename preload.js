@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getSettings: () => ipcRenderer.invoke('get-settings'),
   saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
   getNetworkAddresses: () => ipcRenderer.invoke('get-network-addresses'),
+  getScreenSources: () => ipcRenderer.invoke('get-screen-sources'),
   toggleAutoStart: (enabled) => ipcRenderer.invoke('toggle-auto-start', enabled),
   
   // Event listeners
