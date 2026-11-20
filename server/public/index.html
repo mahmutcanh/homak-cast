@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Homak Cast — Ekranını Yansıt</title>
+  <link rel="stylesheet" href="/sender.css">
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <div class="background-glow"></div>
+
+  <div class="app-container">
+    <header class="header">
+      <div class="logo-box">
+        <div class="logo-icon">📡</div>
+        <div class="logo-text">
+          <h1>HOMAK<span>CAST</span></h1>
+          <p>Kablosuz Ekran ve Ses Aktarımı</p>
+        </div>
+      </div>
+      <div id="connectionStatusBadge" class="badge badge-disconnected">Sunucuya Bağlanıyor...</div>
+    </header>
+
+    <main class="main-content">
+      <!-- 1. Pairing Screen -->
+      <section id="pairingSection" class="card">
+        <h2>Ekranını Alıcıya Bağla</h2>
+        <p class="subtitle">Alıcı ekranındaki 6 haneli eşleştirme kodunu girin veya QR kodu okutun.</p>
+
+        <form id="pinForm" onsubmit="return false;">
+          <div class="pin-input-container">
+            <input type="text" id="pinInput" maxlength="6" inputmode="numeric" placeholder="123456" autocomplete="off" autofocus>
+          </div>
+
+          <div class="settings-row">
+            <div class="field-group">
+              <label for="fpsSelect">Hedef Kare Hızı (FPS):</label>
+              <select id="fpsSelect">
+                <option value="60" selected>60 FPS (Akıcı & Oyun/Video)</option>
+                <option value="30">30 FPS (Sunum & Tasarruf)</option>
+              </select>
+            </div>
+
+            <div class="field-group">
+              <label for="audioToggle">Ses İletimi:</label>
+              <div class="checkbox-wrapper">
+                <input type="checkbox" id="audioToggle" checked>
+                <label for="audioToggle">Sistem / Sekme Sesini Aktar</label>
+              </div>
+            </div>
+          </div>
+
+          <div id="pinError" class="alert alert-error" style="display: none;"></div>
+          <div id="pinInfo" class="alert alert-info" style="display: none;"></div>
+
+          <button id="connectBtn" class="btn btn-primary btn-block">
+            <span class="btn-icon">⚡</span> Eşleştir ve Yayına Başla
+          </button>
+        </form>
+      </section>
+
+      <!-- 2. Waiting for Approval Screen -->
+      <section id="approvalSection" class="card" style="display: none;">
+        <div class="spinner"></div>
+        <h2>Alıcıdan Onay Bekleniyor...</h2>
+        <p class="subtitle">Homak Cast Receiver ekranında yayın isteğiniz belirdi. Lütfen alıcı cihazdan onayı verin.</p>
+        <button id="cancelApprovalBtn" class="btn btn-secondary">İptal Et</button>
+      </section>
+
+      <!-- 3. Active Stream Screen -->
+      <section id="streamingSection" class="card card-streaming" style="display: none;">
+        <div class="stream-header">
+          <div class="live-indicator">
+            <span class="pulse-dot"></span> CANLI YAYINDA
+          </div>
+          <div class="stream-stats" id="streamStats">
+            <span id="statFps">60 FPS</span>
+            <span id="statRes">1080p</span>
+            <span id="statAudio">🔊 Ses Aktif</span>
+          </div>
+        </div>
+
+        <div class="video-preview-wrapper">
+          <video id="localPreviewVideo" autoplay playsinline muted></video>
+        </div>
+
+        <div class="stream-controls">
+          <button id="toggleAudioBtn" class="btn btn-secondary">
+            <span class="btn-icon" id="audioBtnIcon">🔊</span> Sesi Sustur
+          </button>
+          <button id="stopCastBtn" class="btn btn-danger">
+            <span class="btn-icon">⏹</span> Yayını Durdur
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>Homak Cast v1.0 • WebRTC 60 FPS • Düşük Gecikme</p>
+    </footer>
+  </div>
+
+  <script src="/sender.js"></script>
+</body>
+</html>

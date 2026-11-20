@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Homak Cast Receiver</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="assets/socket.io.js"></script>
+</head>
+<body class="theme-dark">
+  <div class="ambient-glow"></div>
+
+  <!-- Main View Container -->
+  <div id="appContainer" class="app-container">
+    
+    <!-- Top Action Bar -->
+    <header class="top-nav">
+      <div class="nav-brand">
+        <div class="brand-badge">HOMAK</div>
+        <div class="brand-title">CAST <span>RECEIVER</span></div>
+      </div>
+
+      <div class="nav-actions">
+        <!-- Display / Projector Selector -->
+        <div class="nav-item">
+          <span class="nav-icon">🖥️</span>
+          <select id="displaySelect" class="custom-select" title="Aktif Ekran / Projeksiyon Seç"></select>
+        </div>
+
+        <!-- Audio Output Selector -->
+        <div class="nav-item">
+          <span class="nav-icon">🔊</span>
+          <select id="audioOutputSelect" class="custom-select" title="Ses Çıkışı (HDMI / Hoparlör)"></select>
+        </div>
+
+        <!-- Fullscreen Button -->
+        <button id="toggleFullscreenBtn" class="nav-btn" title="Tam Ekran (F11)">
+          <span id="fullscreenIcon">⛶</span>
+        </button>
+
+        <!-- Settings Button -->
+        <button id="openSettingsBtn" class="nav-btn" title="Ayarlar">
+          ⚙️
+        </button>
+
+        <!-- Window Controls -->
+        <button id="minimizeBtn" class="nav-btn" title="Simge Durumuna Küçült">—</button>
+        <button id="closeToTrayBtn" class="nav-btn btn-close" title="Tepsiye Gizle">✕</button>
+      </div>
+    </header>
+
+    <!-- 1. STANDBY / PAIRING VIEW -->
+    <main id="standbyView" class="view-standby">
+      <div class="standby-content">
+        <div class="hero-header">
+          <div class="pulse-ring">
+            <div class="broadcast-icon">📡</div>
+          </div>
+          <h1>Yayın Almaya Hazır</h1>
+          <p class="subtitle">Telefonunuzdan, tabletinizden veya bilgisayarınızdan bağlanarak ekranınızı bu ekrana yansıtın.</p>
+        </div>
+
+        <div class="pairing-grid">
+          <!-- Left: 6-Digit PIN Card -->
+          <div class="card card-pin">
+            <span class="card-tag">EŞLEŞTİRME KODU</span>
+            <div class="pin-display">
+              <span id="pinCode" class="pin-digits">--- ---</span>
+              <button id="refreshPinBtn" class="btn-refresh" title="Yeni Kod Oluştur">🔄</button>
+            </div>
+            <p class="card-hint">Yayın başlatmak için bu 6 haneli kodu göndericiye girin.</p>
+          </div>
+
+          <!-- Right: QR Code Card -->
+          <div class="card card-qr">
+            <span class="card-tag">HIZLI BAĞLANTI QR</span>
+            <div class="qr-container">
+              <img id="qrImage" src="" alt="Yansıtma QR Kodu" class="qr-code-img">
+            </div>
+            <div class="qr-address-box">
+              <span class="qr-link-label">Veya tarayıcıda açın:</span>
+              <span id="connectUrlText" class="qr-url">http://127.0.0.1:5240</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="specs-bar">
+          <div class="spec-item"><span class="dot-live"></span> 60 FPS Ultra Akıcı</div>
+          <div class="spec-item"><span class="dot-live"></span> Düşük Gecikmeli WebRTC</div>
+          <div class="spec-item"><span class="dot-live"></span> HDMI & Çoklu Ekran Desteği</div>
+          <div class="spec-item"><span class="dot-live"></span> Çapraz Ağ & VLAN Geçişi</div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 2. STREAMING VIEW (ACTIVE CAST) -->
+    <section id="streamingView" class="view-streaming" style="display: none;">
+      <video id="remoteVideo" autoplay playsinline></video>
+
+      <!-- Floating Controls Bar (Shows on hover) -->
+      <div class="stream-floating-bar" id="floatingBar">
+        <div class="stream-info">
+          <span class="live-badge"><span class="pulse-dot"></span> CANLI</span>
+          <span id="activeSenderName" class="sender-name">Cihaz Adı</span>
+        </div>
+
+        <div class="stream-metrics" id="streamMetrics">
+          <span id="liveFps">60 FPS</span>
+          <span id="liveResolution">1920x1080</span>
+        </div>
+
+        <div class="stream-actions">
+          <button id="floatingMuteBtn" class="stream-btn" title="Sesi Aç / Kapat">🔊</button>
+          <button id="floatingFullscreenBtn" class="stream-btn" title="Tam Ekran">⛶</button>
+          <button id="disconnectCastBtn" class="stream-btn btn-danger" title="Yayını Sonlandır">
+            ⏹ Yayını Durdur
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. APPROVAL MODAL -->
+    <div id="approvalModal" class="modal-overlay" style="display: none;">
+      <div class="modal-box modal-approval">
+        <div class="modal-icon">🔒</div>
+        <h2>Yayın Talebi Onayı</h2>
+        <p class="modal-subtitle">Aşağıdaki cihaz ekranını bu projeksiyona/ekrana yansıtmak istiyor:</p>
+        
+        <div class="device-info-card">
+          <div class="device-row"><strong>Cihaz:</strong> <span id="approvalDeviceName">-</span></div>
+          <div class="device-row"><strong>IP Adresi:</strong> <span id="approvalDeviceIp">-</span></div>
+        </div>
+
+        <div class="approval-progress-bar">
+          <div id="approvalCountdown" class="progress-fill"></div>
+        </div>
+
+        <div class="modal-actions">
+          <button id="rejectPairingBtn" class="btn btn-secondary">✕ Reddet</button>
+          <button id="acceptPairingBtn" class="btn btn-primary">✓ Kabul Et</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. SETTINGS MODAL -->
+    <div id="settingsModal" class="modal-overlay" style="display: none;">
+      <div class="modal-box modal-settings">
+        <div class="settings-header">
+          <h2>⚙️ Homak Cast Ayarları</h2>
+          <button id="closeSettingsModalBtn" class="btn-icon-close">✕</button>
+        </div>
+
+        <div class="settings-form">
+          <div class="form-group">
+            <label for="settingDeviceName">Alıcı Cihaz Adı:</label>
+            <input type="text" id="settingDeviceName" class="form-input">
+          </div>
+
+          <div class="form-group">
+            <label for="settingPort">Sunucu Portu:</label>
+            <input type="number" id="settingPort" class="form-input" min="1024" max="65535">
+          </div>
+
+          <div class="form-group checkbox-group">
+            <input type="checkbox" id="settingRequireApproval">
+            <label for="settingRequireApproval">Ekran paylaşımında kullanıcı onayı zorunlu olsun</label>
+          </div>
+
+          <div class="form-group checkbox-group">
+            <input type="checkbox" id="settingAutoStart">
+            <label for="settingAutoStart">Windows oturumu açıldığında otomatik başlat</label>
+          </div>
+
+          <div class="form-group">
+            <label for="settingFps">Hedef Kare Hızı (FPS):</label>
+            <select id="settingFps" class="form-input">
+              <option value="60">60 FPS (Akıcı)</option>
+              <option value="30">30 FPS (Standart)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="settingStunServers">STUN / TURN Sunucuları (Satır başına 1 adres):</label>
+            <textarea id="settingStunServers" class="form-input form-textarea" rows="3"></textarea>
+            <small class="form-hint">Farklı subnet, VLAN veya dış ağ bağlantıları için gereklidir.</small>
+          </div>
+
+          <div class="modal-actions">
+            <button id="saveSettingsBtn" class="btn btn-primary">Ayarları Kaydet</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
