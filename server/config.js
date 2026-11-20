@@ -18,6 +18,7 @@ const SETTINGS_FILE = path.join(APPDATA_DIR, 'settings.json');
 
 const defaultConfig = {
   port: 5240,
+  signalingServerUrl: 'https://cast.homaklab.com',
   deviceName: 'Homak Cast Receiver',
   requireApproval: true,
   autoStartOnBoot: false,

@@ -31,6 +31,7 @@
   // Settings Modal
   const settingsModal = document.getElementById('settingsModal');
   const closeSettingsModalBtn = document.getElementById('closeSettingsModalBtn');
+  const settingSignalingUrl = document.getElementById('settingSignalingUrl');
   const settingDeviceName = document.getElementById('settingDeviceName');
   const settingPort = document.getElementById('settingPort');
   const settingRequireApproval = document.getElementById('settingRequireApproval');
@@ -52,10 +53,29 @@
   // Initialize
   async function init() {
     currentSettings = await window.electronAPI.getSettings();
-    const serverPort = currentSettings.port || 5240;
+    const serverUrl = currentSettings.signalingServerUrl || 'https://cast.homaklab.com';
+    const localFallbackUrl = `http://localhost:${currentSettings.port || 5240}`;
 
-    // Connect to embedded signaling server
-    socket = io(`http://localhost:${serverPort}`);
+    console.log(`[Receiver] Connecting to signaling server: ${serverUrl}`);
+    // Connect to primary signaling server
+    socket = io(serverUrl, { timeout: 5000, reconnectionAttempts: 3 });
+
+    let connected = false;
+    socket.on('connect', () => {
+      connected = true;
+      console.log(`[Receiver] Connected to signaling server: ${serverUrl}`);
+      registerWithServer();
+    });
+
+    socket.on('connect_error', (err) => {
+      console.warn(`[Receiver] Failed to connect to ${serverUrl}:`, err.message);
+      if (!connected && serverUrl !== localFallbackUrl) {
+        console.log(`[Receiver] Falling back to local embedded server: ${localFallbackUrl}`);
+        socket.disconnect();
+        socket = io(localFallbackUrl);
+        setupSocketEvents();
+      }
+    });
 
     setupSocketEvents();
     setupDisplays();
@@ -63,16 +83,19 @@
     setupUIEvents();
   }
 
+  function registerWithServer() {
+    if (!socket) return;
+    socket.emit('register-receiver', {
+      deviceName: currentSettings.deviceName || 'Homak Cast Receiver'
+    }, (res) => {
+      if (res && res.ok) {
+        updatePinDisplay(res.pin, res.qrUrl);
+      }
+    });
+  }
+
   // Socket.IO Events
   function setupSocketEvents() {
-    socket.on('connect', () => {
-      console.log('[Receiver] Connected to signaling server.');
-      socket.emit('register-receiver', {}, (res) => {
-        if (res && res.ok) {
-          updatePinDisplay(res.pin, res.qrUrl);
-        }
-      });
-    });
 
     socket.on('pin-update', ({ pin, qrUrl }) => {
       updatePinDisplay(pin, qrUrl);
@@ -132,8 +155,8 @@
 
     if (qrUrl) {
       connectUrlText.textContent = qrUrl;
-      // Fetch high-res QR image data
-      fetch(`/api/qr?code=${pin}`)
+      const baseUrl = currentSettings.signalingServerUrl || 'https://cast.homaklab.com';
+      fetch(`${baseUrl}/api/qr?code=${pin}`)
         .then(r => r.json())
         .then(data => {
           if (data.ok && data.qr) {
@@ -141,7 +164,7 @@
           }
         })
         .catch(err => {
-          console.error('Failed to load QR code image:', err);
+          console.error('Failed to load QR code image from server:', err);
         });
     }
   }
@@ -317,6 +340,7 @@
 
   // Settings Modal Logic
   function openSettings() {
+    settingSignalingUrl.value = currentSettings.signalingServerUrl || 'https://cast.homaklab.com';
     settingDeviceName.value = currentSettings.deviceName || 'Homak Cast Receiver';
     settingPort.value = currentSettings.port || 5240;
     settingRequireApproval.checked = !!currentSettings.requireApproval;
@@ -341,6 +365,7 @@
       .map(url => ({ urls: url }));
 
     const updated = {
+      signalingServerUrl: settingSignalingUrl.value.trim() || 'https://cast.homaklab.com',
       deviceName: settingDeviceName.value.trim() || 'Homak Cast Receiver',
       port: parseInt(settingPort.value, 10) || 5240,
       requireApproval: settingRequireApproval.checked,
