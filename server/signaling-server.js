@@ -157,6 +157,16 @@ class SignalingServer {
       return res.json({ ok: true, message: 'Kod doğrulandı.', deviceName: receiver.deviceName });
     });
 
+    // Direct download endpoint for Windows Receiver EXE
+    this.app.get('/download', (req, res) => {
+      const exePath = path.join(__dirname, 'public', 'downloads', 'Homak-Cast-Receiver.exe');
+      res.download(exePath, 'Homak-Cast-Receiver.exe', (err) => {
+        if (err && !res.headersSent) {
+          res.status(404).send('İndirme dosyası hazırlanıyor veya bulunamadı.');
+        }
+      });
+    });
+
     // Fallback route to web sender
     this.app.get('*', (req, res) => {
       res.sendFile(path.join(__dirname, 'public', 'index.html'));

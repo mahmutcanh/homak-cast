@@ -19,7 +19,12 @@
           <p>Kablosuz Ekran ve Ses Aktarımı</p>
         </div>
       </div>
-      <div id="connectionStatusBadge" class="badge badge-disconnected">Sunucuya Bağlanıyor...</div>
+      <div class="header-right">
+        <a href="/download" class="btn-download-top" title="Windows Alıcı Uygulamasını İndir (Portable EXE)">
+          <span>⬇️</span> Alıcıyı İndir (.exe)
+        </a>
+        <div id="connectionStatusBadge" class="badge badge-disconnected">Sunucuya Bağlanıyor...</div>
+      </div>
     </header>
 
     <main class="main-content">
@@ -58,6 +63,20 @@
             <span class="btn-icon">⚡</span> Eşleştir ve Yayına Başla
           </button>
         </form>
+
+        <!-- Receiver EXE Download Box -->
+        <div class="download-box">
+          <div class="download-box-content">
+            <div class="download-box-icon">🖥️</div>
+            <div class="download-box-text">
+              <strong>Bu bilgisayarı Alıcı (Receiver) mı yapmak istiyorsunuz?</strong>
+              <p>Projeksiyon veya TV'ye bağlı Windows bilgisayarda çalıştırmak için alıcıyı indirin.</p>
+            </div>
+          </div>
+          <a href="/download" class="btn btn-secondary btn-download" download="Homak-Cast-Receiver.exe">
+            <span>📥</span> Windows Receiver İndir (.exe)
+          </a>
+        </div>
       </section>
 
       <!-- 2. Waiting for Approval Screen -->
