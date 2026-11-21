@@ -25,14 +25,14 @@
   "author": "Homak Lab",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.21.2",
+    "express": "^5.3.0",
     "qrcode": "^1.5.4",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.4",
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "electron": "^40.8.0",
+    "electron": "^45.4.1",
     "electron-builder": "^26.4.2"
   },
   "build": {

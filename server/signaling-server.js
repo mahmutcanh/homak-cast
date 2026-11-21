@@ -328,7 +328,7 @@ class SignalingServer {
     });
 
     // Fallback route to web sender
-    this.app.get('*', (req, res) => {
+    this.app.get('/{*splat}', (req, res) => {
       res.sendFile(path.join(__dirname, 'public', 'index.html'));
     });
   }
@@ -722,7 +722,8 @@ class SignalingServer {
 
   start() {
     return new Promise((resolve, reject) => {
-      this.server.listen(this.port, '0.0.0.0', () => {
+      // BIND_HOST=127.0.0.1 on the public server so only the reverse proxy/tunnel can reach it.
+      this.server.listen(this.port, process.env.BIND_HOST || '0.0.0.0', () => {
         const addresses = getNetworkAddresses();
         console.log(`\n======================================================`);
         console.log(`  HOMAK CAST SIGNALING & WEB SENDER SERVER STARTED`);

@@ -1005,6 +1005,9 @@
 
   // --- UI Events & Mode Switcher ---
   function setupUIEvents() {
+    // CSP forbids inline handlers: block native form submission here instead.
+    if (desktopCastForm) desktopCastForm.addEventListener('submit', (e) => e.preventDefault());
+
     // Mode toggle between Cloud and LAN
     if (btnModeCloud) {
       btnModeCloud.addEventListener('click', () => {

@@ -31,7 +31,8 @@
 
 ### 6. Gelişmiş Güvenlik & Rate Limiting
 - **Kaba Kuvvet (Brute-Force) Koruması:** Eşleştirme kodunu arka arkaya 5 kez yanlış giren IP adresleri geçici olarak engellenir.
-- **Kullanıcı Onayı (Opsiyonel / Varsayılan Açık):** Bir cihaz kod girse dahi alıcı ekranında onay penceresi ("X cihazı ekranını yansıtmak istiyor: Kabul Et / Reddet") açılır. 30 saniye içinde yanıt verilmezse otomatik reddedilir.
+- **Anında Bağlantı (Varsayılan):** Doğru kodu giren cihaz onay beklemeden hemen bağlanır.
+- **Kullanıcı Onayı (Opsiyonel / Varsayılan Kapalı):** Alıcı ayarlarından açılırsa, kod girilse dahi alıcı ekranında onay penceresi ("X cihazı ekranını yansıtmak istiyor: Kabul Et / Reddet") açılır. 30 saniye içinde yanıt verilmezse otomatik reddedilir. Onay tercihi alıcı başınadır.
 
 ### 7. Çapraz Ağ & VLAN / WAN Desteği
 - Farklı Subnet, farklı VLAN veya internet üzerinden bağlantı için STUN ve TURN sunucu desteği.
