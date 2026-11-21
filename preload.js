@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getNetworkAddresses: () => ipcRenderer.invoke('get-network-addresses'),
   getScreenSources: () => ipcRenderer.invoke('get-screen-sources'),
   toggleAutoStart: (enabled) => ipcRenderer.invoke('toggle-auto-start', enabled),
+  saveRecording: (data) => ipcRenderer.invoke('save-recording', data),
+  openRecordingsFolder: () => ipcRenderer.invoke('open-recordings-folder'),
   
   // Event listeners
   onDisplaysUpdated: (callback) => {
@@ -29,5 +31,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = () => callback();
     ipcRenderer.on('open-settings-modal', handler);
     return () => ipcRenderer.removeListener('open-settings-modal', handler);
+  },
+  onFullscreenChanged: (callback) => {
+    const handler = (event, isFull) => callback(isFull);
+    ipcRenderer.on('fullscreen-changed', handler);
+    return () => ipcRenderer.removeListener('fullscreen-changed', handler);
   }
 });

@@ -9,21 +9,26 @@ let signalingServer = null;
 let settings = loadSettings();
 let currentDisplayId = null;
 
-// Hardware acceleration and WebRTC flags for 60fps performance
+// Hardware acceleration and WebRTC flags for 60fps performance without black screens
 app.commandLine.appendSwitch('enable-gpu-rasterization');
-app.commandLine.appendSwitch('enable-zero-copy');
 app.commandLine.appendSwitch('ignore-gpu-blocklist');
-app.commandLine.appendSwitch('enable-webrtc-pipewire-capturer');
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+app.commandLine.appendSwitch('disable-features', 'HardwareMediaKeyHandling');
 
 async function createWindow() {
+  // Remove default File, Edit, View, Window menus permanently
+  Menu.setApplicationMenu(null);
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 960,
     minHeight: 640,
-    title: 'Homak Cast Receiver',
+    title: 'The Land of Legends — Cast Receiver',
     icon: path.join(__dirname, 'src', 'renderer', 'assets', 'icon.png'),
-    backgroundColor: '#0a0e17',
+    backgroundColor: '#ffffff',
+    autoHideMenuBar: true,
+    fullscreen: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -32,11 +37,27 @@ async function createWindow() {
     }
   });
 
+  mainWindow.removeMenu();
+  mainWindow.setMenu(null);
+  mainWindow.setMenuBarVisibility(false);
+  mainWindow.setFullScreen(true);
+
   // Load the Receiver UI
   mainWindow.loadFile(path.join(__dirname, 'src', 'renderer', 'index.html'));
 
+  mainWindow.webContents.on('console-message', (e, level, msg, line, src) => {
+    console.log(`[Renderer Log] ${msg}`);
+  });
+
   // Multi-monitor placement
   applyDisplaySetting();
+
+  mainWindow.on('enter-full-screen', () => {
+    mainWindow.webContents.send('fullscreen-changed', true);
+  });
+  mainWindow.on('leave-full-screen', () => {
+    mainWindow.webContents.send('fullscreen-changed', false);
+  });
 
   // Close to tray logic
   mainWindow.on('close', (event) => {
@@ -70,12 +91,8 @@ function applyDisplaySetting() {
 
   if (mainWindow) {
     const bounds = targetDisplay.bounds;
-    mainWindow.setBounds({
-      x: bounds.x + Math.floor((bounds.width - 1280) / 2),
-      y: bounds.y + Math.floor((bounds.height - 800) / 2),
-      width: Math.min(1280, bounds.width),
-      height: Math.min(800, bounds.height)
-    });
+    mainWindow.setBounds(bounds);
+    mainWindow.setFullScreen(true);
   }
 }
 
@@ -212,6 +229,8 @@ function moveToDisplay(displayId, fullscreen = false) {
   if (fullscreen) {
     mainWindow.setFullScreen(false);
     mainWindow.setBounds(target.bounds);
+    mainWindow.removeMenu();
+    mainWindow.setMenuBarVisibility(false);
     mainWindow.setFullScreen(true);
   } else {
     mainWindow.setFullScreen(false);
@@ -221,6 +240,8 @@ function moveToDisplay(displayId, fullscreen = false) {
       width: Math.min(1280, target.bounds.width - 100),
       height: Math.min(800, target.bounds.height - 100)
     });
+    mainWindow.removeMenu();
+    mainWindow.setMenuBarVisibility(false);
   }
 
   updateTrayMenu();
@@ -293,6 +314,32 @@ ipcMain.handle('toggle-auto-start', (event, enabled) => {
   return enabled;
 });
 
+ipcMain.handle('save-recording', async (event, { buffer, filename }) => {
+  try {
+    const videosDir = path.join(app.getPath('videos'), 'HomakCast_Recordings');
+    if (!fs.existsSync(videosDir)) {
+      fs.mkdirSync(videosDir, { recursive: true });
+    }
+    const safeFilename = filename || `HomakCast_${Date.now()}.webm`;
+    const fullPath = path.join(videosDir, safeFilename);
+    fs.writeFileSync(fullPath, Buffer.from(buffer));
+    console.log('[Recording] File saved successfully:', fullPath);
+    return { ok: true, filePath: fullPath };
+  } catch (err) {
+    console.error('Failed to save recording:', err);
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('open-recordings-folder', async () => {
+  const videosDir = path.join(app.getPath('videos'), 'HomakCast_Recordings');
+  if (!fs.existsSync(videosDir)) {
+    fs.mkdirSync(videosDir, { recursive: true });
+  }
+  shell.openPath(videosDir);
+  return { ok: true };
+});
+
 // Screen display events
 function registerScreenEvents() {
   const onScreenChange = () => {
@@ -338,6 +385,18 @@ app.whenReady().then(async () => {
   await createWindow();
   createTray();
   registerScreenEvents();
+
+  // 3. Register auto-start on Windows boot
+  if (settings.autoStartOnBoot !== false) {
+    try {
+      app.setLoginItemSettings({
+        openAtLogin: true,
+        path: process.execPath
+      });
+    } catch (e) {
+      console.warn('Could not register login item:', e);
+    }
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

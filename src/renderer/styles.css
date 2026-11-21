@@ -798,3 +798,542 @@ body {
   cursor: pointer;
   color: var(--text-main);
 }
+
+/* ==========================================================================
+   THE LAND OF LEGENDS THEME (Clean White Background, Logo Top, Split Code/QR)
+   ========================================================================== */
+body.theme-lol {
+  background-color: #ffffff;
+  color: #1e293b;
+}
+
+body.theme-lol .ambient-glow {
+  display: none;
+}
+
+body.theme-lol .top-nav {
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.brand-badge-lol {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: #f8fafc;
+  font-weight: 800;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  letter-spacing: 1px;
+}
+
+body.theme-lol .nav-btn {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #1e293b;
+}
+
+body.theme-lol .nav-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+body.theme-lol .nav-item {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+}
+
+body.theme-lol .custom-select {
+  color: #1e293b;
+}
+
+body.theme-lol .custom-select option {
+  background: #ffffff;
+  color: #1e293b;
+}
+
+body.theme-lol .mode-tabs {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+}
+
+body.theme-lol .tab-btn {
+  color: #64748b;
+}
+
+body.theme-lol .tab-btn.active {
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* Standby Layout (Optimized for Pure Fullscreen Display) */
+.view-standby {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  height: 100vh;
+  width: 100vw;
+  background: #ffffff;
+}
+
+.standby-wrapper {
+  max-width: 1380px;
+  width: 92%;
+  height: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-evenly;
+  padding: 24px 20px;
+  box-sizing: border-box;
+}
+
+.lol-brand-header {
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.lol-main-logo {
+  max-height: 110px;
+  width: auto;
+  object-fit: contain;
+  margin-bottom: 12px;
+}
+
+.lol-hero-title {
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #0f172a;
+  text-transform: uppercase;
+}
+
+.lol-hero-subtitle {
+  font-size: 15px;
+  color: #64748b;
+  margin-top: 6px;
+}
+
+/* Split Grid: Left PIN, Right QR */
+.lol-split-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 36px;
+  width: 100%;
+  margin: 10px 0;
+}
+
+.lol-panel {
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 24px;
+  padding: 32px;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.04);
+}
+
+.lol-panel-left {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.lol-panel-right {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  justify-content: space-between;
+}
+
+.panel-tag {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 5px 14px;
+  border-radius: 20px;
+  width: fit-content;
+  margin-bottom: 16px;
+}
+
+.lol-pin-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  background: #ffffff;
+  border: 2px solid #cbd5e1;
+  border-radius: 20px;
+  padding: 16px 28px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.03);
+  margin-bottom: 20px;
+}
+
+.lol-pin-digits {
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 60px;
+  font-weight: 900;
+  letter-spacing: 12px;
+  color: #0f172a;
+}
+
+.lol-btn-refresh {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.25s ease, background 0.2s ease;
+}
+
+.lol-btn-refresh:hover {
+  background: #e2e8f0;
+  transform: rotate(180deg);
+}
+
+.lol-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.lol-step-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.step-badge {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #0f172a;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-desc {
+  font-size: 15px;
+  color: #334155;
+  line-height: 1.45;
+}
+
+.highlight-url {
+  color: #2563eb;
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.lol-badges-pill-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+
+.lol-pill {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #475569;
+  padding: 6px 14px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot-green {
+  width: 9px;
+  height: 9px;
+  background: #10b981;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #10b981;
+}
+
+/* Right Panel QR */
+.lol-qr-box {
+  width: 240px;
+  height: 240px;
+  background: #ffffff;
+  border: 2px solid #cbd5e1;
+  border-radius: 20px;
+  padding: 10px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 10px 0 16px;
+}
+
+.lol-qr-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.lol-qr-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.qr-action-hint {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.qr-url-badge {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #2563eb;
+  word-break: break-all;
+}
+
+/* Standby Bottom Bar: Interactive Pills */
+.lol-bottom-bar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding-top: 10px;
+}
+
+.lol-net-pill {
+  background: #f8fafc;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 30px;
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.lol-net-pill:hover {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.lol-net-pill.active {
+  background: #eff6ff;
+  border-color: #2563eb;
+  color: #1d4ed8;
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.15);
+}
+
+.lol-net-pill strong,
+.lol-net-pill code {
+  color: #0f172a;
+}
+
+/* ==========================================================================
+   MULTI-SCREEN SPLIT SCREEN & STREAMING ENHANCEMENTS
+   ========================================================================== */
+.video-grid {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  background: #000000;
+  position: relative;
+  overflow: hidden;
+}
+
+.video-grid.grid-1 {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+}
+
+.video-grid.grid-2 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr;
+  gap: 4px;
+}
+
+.video-grid.grid-3,
+.video-grid.grid-4 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 4px;
+}
+
+.video-tile {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0a0e17;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-tile video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000000;
+}
+
+.tile-tag {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+  color: #ffffff;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Annotation Canvas */
+.annotation-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 25;
+}
+
+/* Floating PIN Watermark in Streaming View */
+.floating-pin-badge {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(10px);
+  color: #f8fafc;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0.75;
+  transition: opacity 0.2s ease, transform 0.2s ease, background 0.2s ease;
+  user-select: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.floating-pin-badge:hover {
+  opacity: 1;
+  transform: scale(1.03);
+  background: rgba(15, 23, 42, 0.95);
+  border-color: #3b82f6;
+}
+
+.watermark-pin {
+  color: #60a5fa;
+  font-family: 'Consolas', monospace;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.watermark-count {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+/* Recording Status Badge */
+.recording-badge {
+  position: absolute;
+  top: 18px;
+  left: 20px;
+  background: rgba(225, 29, 72, 0.9);
+  color: #ffffff;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 16px rgba(225, 29, 72, 0.5);
+}
+
+.rec-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffffff;
+  animation: blinkRec 1s infinite ease-in-out;
+}
+
+@keyframes blinkRec {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+
+/* Recording Button in Floating Bar */
+.btn-record {
+  background: rgba(225, 29, 72, 0.2);
+  border-color: #e11d48;
+  color: #ff6b8b;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-record:hover {
+  background: #e11d48;
+  color: #ffffff;
+}
+
+.btn-record.btn-recording {
+  background: #e11d48;
+  color: #ffffff;
+  animation: pulseRecBtn 2s infinite ease-in-out;
+}
+
+@keyframes pulseRecBtn {
+  0%, 100% { box-shadow: 0 0 4px rgba(225, 29, 72, 0.5); }
+  50% { box-shadow: 0 0 16px rgba(225, 29, 72, 0.9); }
+}

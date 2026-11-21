@@ -3,103 +3,106 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#00f0ff">
+  <meta name="theme-color" content="#ffffff">
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/png" href="/assets/icon.png">
   <link rel="apple-touch-icon" href="/assets/icon.png">
-  <title>Homak Cast — Ekranını Yansıt</title>
-  <link rel="stylesheet" href="/sender.css">
+  <title>The Land of Legends — Ekranını Yansıt</title>
+  <link rel="stylesheet" href="/sender.css?v=2.0.0">
   <script src="/socket.io/socket.io.js"></script>
 </head>
-<body>
-  <div class="background-glow"></div>
+<body class="theme-light">
+  <div class="background-decor"></div>
 
   <div class="app-container">
     <header class="header">
       <div class="logo-box">
-        <div class="logo-icon">📡</div>
-        <div class="logo-text">
-          <h1>HOMAK<span>CAST</span></h1>
-          <p>Kablosuz Ekran ve Ses Aktarımı</p>
-        </div>
+        <img src="/assets/lol-logo.png" alt="The Land of Legends" class="web-lol-logo">
+        <div class="logo-badge">CAST</div>
       </div>
       <div class="header-right">
         <a href="/download" id="topDownloadBtn" class="btn-download-top" title="Uygulamayı İndir">
-          <span>⬇️</span> İndir
+          <span>⬇️</span> Alıcı İndir
         </a>
         <div id="connectionStatusBadge" class="badge badge-disconnected">Sunucuya Bağlanıyor...</div>
       </div>
     </header>
 
     <main class="main-content">
-      <!-- 1. Pairing Screen -->
-      <section id="pairingSection" class="card">
-        <h2>Ekranını Alıcıya Bağla</h2>
-        <p class="subtitle">Alıcı ekranındaki 6 haneli eşleştirme kodunu girin veya QR kodu okutun.</p>
-
-        <!-- Detected Device Indicator Badge -->
-        <div id="detectedDeviceBadge" class="detected-device-badge">
-          <span class="device-icon">📱</span> Cihazınız algılanıyor...
-        </div>
+      <!-- 1. Pairing Screen (Ultra-Clean & Dead Simple) -->
+      <section id="pairingSection" class="card card-clean">
+        <div class="card-icon-hero">📺</div>
+        <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 6px;">Ekrana Bağlan</h2>
+        <p class="subtitle" style="font-size: 14px; margin-bottom: 20px;">Karşı ekrandaki 6 haneli kodu girin:</p>
 
         <form id="pinForm" onsubmit="return false;">
           <div class="pin-input-container">
-            <input type="text" id="pinInput" maxlength="6" inputmode="numeric" placeholder="123456" autocomplete="off" autofocus>
+            <input 
+              type="text" 
+              id="pinInput" 
+              maxlength="7" 
+              inputmode="numeric" 
+              placeholder="000 000" 
+              autocomplete="off" 
+              autofocus
+            >
           </div>
 
-          <div class="settings-row">
-            <div class="field-group">
-              <label for="fpsSelect">Hedef Kare Hızı (FPS):</label>
-              <select id="fpsSelect">
-                <option value="60" selected>60 FPS (Akıcı & Oyun/Video)</option>
-                <option value="30">30 FPS (Sunum & Tasarruf)</option>
-              </select>
-            </div>
-
-            <div class="field-group">
-              <label for="audioToggle">Ses İletimi:</label>
-              <div class="checkbox-wrapper">
-                <input type="checkbox" id="audioToggle" checked>
-                <label for="audioToggle">Sistem / Sekme Sesini Aktar</label>
-              </div>
+          <!-- Kaynak Seçimi (Ekran veya Kamera) -->
+          <div class="source-mode-toggle">
+            <span class="source-mode-label">Yayın Kaynağı:</span>
+            <div class="source-mode-buttons">
+              <button type="button" class="source-toggle-btn active" id="btnSourceScreen" data-value="screen" title="Bilgisayarınızın ekranını, penceresini veya tarayıcı sekmesini yansıtın">
+                <span class="toggle-icon">🖥️</span>
+                <span class="toggle-text">Ekranımı Paylaş</span>
+              </button>
+              <button type="button" class="source-toggle-btn" id="btnSourceCamera" data-value="camera-back" title="Cihazınızın kamerasını canlı belge veya sunum kamerası olarak açın">
+                <span class="toggle-icon">📷</span>
+                <span class="toggle-text">Kamera Aç</span>
+              </button>
             </div>
           </div>
 
           <div id="pinError" class="alert alert-error" style="display: none;"></div>
           <div id="pinInfo" class="alert alert-info" style="display: none;"></div>
 
-          <button id="connectBtn" class="btn btn-primary btn-block">
-            <span class="btn-icon">⚡</span> Eşleştir ve Yayına Başla
+          <button id="connectBtn" class="btn btn-primary btn-block btn-hero">
+            <span class="btn-icon">⚡</span> YAYINA BAŞLA
           </button>
+
+          <!-- Hidden default inputs so logic continues working seamlessly -->
+          <select id="streamSourceSelect" style="display: none;">
+            <option value="screen" selected>Ekran</option>
+            <option value="camera-back">Arka Kamera</option>
+            <option value="camera-front">Ön Kamera</option>
+          </select>
+          <select id="fpsSelect" style="display: none;">
+            <option value="60" selected>60 FPS</option>
+          </select>
+          <input type="checkbox" id="audioToggle" checked style="display: none;">
         </form>
 
-        <!-- Device-specific Dynamic Download Card -->
-        <div class="download-box">
-          <div class="download-box-content">
-            <div id="downloadCardIcon" class="download-box-icon">💻</div>
-            <div class="download-box-text">
-              <strong id="downloadCardTitle">Cihazınıza Özel Alıcı / Uygulama</strong>
-              <p id="downloadCardDesc">Cihazınıza özel uygulamayı indirerek daha hızlı ekran yansıtma ve alıcı desteği sağlayın.</p>
-            </div>
-          </div>
-          <a href="/download" id="downloadCardLink" class="btn btn-secondary btn-download">
-            <span>📥</span> Uygulamayı İndir
-          </a>
-
-          <!-- Manual Platform Selector -->
-          <div class="manual-downloads">
-            <span class="manual-downloads-title">Farklı bir işletim sistemi için indirin:</span>
-            <div class="platform-chips">
-              <a href="/download" class="platform-chip" download="Homak-Cast-Receiver.exe">
-                <span>💻</span> Windows (.exe)
+        <!-- Subtle Collapsible Download & Details Link -->
+        <div class="minimal-footer-links">
+          <button id="toggleDownloadsBtn" class="link-toggle" type="button">
+            <span>💾</span> Windows Alıcıyı İndir veya Diğer Cihazlar ▾
+          </button>
+          
+          <div id="collapsibleDownloads" style="display: none; margin-top: 14px;">
+            <div class="platform-chips" style="justify-content: center; flex-wrap: wrap; gap: 8px;">
+              <a href="/download/setup" class="platform-chip active-chip" download="Homak-Cast-Setup.exe" style="border: 1.5px solid #2563eb; background: #eff6ff; font-weight: 600;" title="Yönetici (UAC) İzni ile Kurulur, Masaüstüne ve Windows Başlangıcına (Startup) Otomatik Eklenir">
+                <span>🛡️</span> Windows Kurulum (UAC & Startup)
               </a>
-              <a href="/download/android" class="platform-chip" download="Homak-Cast.apk">
+              <a href="/download" class="platform-chip" download="Homak-Cast-Receiver.exe" title="Kurulum gerektirmez, doğrudan çift tıklayarak anında çalıştırabilirsiniz">
+                <span>⚡</span> Portable (Kurulumsuz .exe)
+              </a>
+              <a href="/download/android" class="platform-chip" download="Homak-Cast.apk" title="Android cihazlar için alıcı paketi">
                 <span>📱</span> Android (.apk)
               </a>
-              <a href="/" class="platform-chip">
-                <span>🌐</span> Web / Mac / iOS
-              </a>
             </div>
+            <p style="font-size: 12px; color: #64748b; margin-top: 8px; text-align: center;">
+              💡 <strong>Tavsiye Edilen:</strong> Kalıcı alıcı cihazlar için <strong>Windows Kurulum (UAC & Startup)</strong> seçeneğini indirin.
+            </p>
           </div>
         </div>
       </section>
@@ -125,11 +128,30 @@
           </div>
         </div>
 
-        <div class="video-preview-wrapper">
+        <div class="video-preview-wrapper" style="position: relative;">
           <video id="localPreviewVideo" autoplay playsinline muted></video>
+          <div id="pointerTouchLayer" class="pointer-touch-layer" style="display: none;"></div>
+        </div>
+
+        <div class="stream-tools-row" style="display: flex; gap: 8px; justify-content: center; margin: 12px 0;">
+          <button id="toggleLaserBtn" class="btn btn-sm btn-secondary" type="button" title="Lazer Noktası (Ekrana dokunarak karşı ekranda işaretleyin)">
+            <span>🔴</span> Lazer Noktası
+          </button>
+          <button id="toggleDrawBtn" class="btn btn-sm btn-secondary" type="button" title="Çizim / Vurgu (Karşı ekranda çizim yapın)">
+            <span>✏️</span> Çizim Yap
+          </button>
+          <button id="clearAnnotationBtn" class="btn btn-sm btn-secondary" type="button" title="Tüm Çizimleri Temizle">
+            <span>🧹</span> Temizle
+          </button>
         </div>
 
         <div class="stream-controls">
+          <button id="switchSourceBtn" class="btn btn-primary" title="Yayın Kaynağını Değiştir (Kamera / Ekran / Belge)">
+            <span class="btn-icon">🔄</span> Kaynak Değiştir
+          </button>
+          <button id="flipCameraBtn" class="btn btn-secondary" title="Ön ve Arka Kamerayı Çevir">
+            <span class="btn-icon">🔃</span> Çevir
+          </button>
           <button id="toggleAudioBtn" class="btn btn-secondary">
             <span class="btn-icon" id="audioBtnIcon">🔊</span> Sesi Sustur
           </button>
@@ -137,14 +159,120 @@
             <span class="btn-icon">⏹</span> Yayını Durdur
           </button>
         </div>
+        <input type="file" id="documentFileInput" accept="image/*,application/pdf" style="display: none;">
       </section>
     </main>
 
     <footer class="footer">
-      <p>Homak Cast v1.0 • WebRTC 60 FPS • Düşük Gecikme</p>
+      <p>The Land of Legends • Kablosuz Ekran ve Sunum Merkezi • 60 FPS Ultra Akıcı</p>
     </footer>
   </div>
 
-  <script src="/sender.js"></script>
+  <!-- Mobile Guidance Modal -->
+  <div id="mobileGuideModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3><span>📱</span> Mobil Ekran Paylaşımı</h3>
+        <button id="closeGuideModalBtn" class="btn-close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="alert-warning" style="margin-bottom: 14px;">
+          <strong>Neden Web Üzerinden Ekran Paylaşılamıyor?</strong>
+          <p style="margin-top: 4px;">Android (Google) ve iOS (Apple) güvenlik politikası gereği web sitelerinin tüm telefon ekranını ve diğer uygulamaları canlı kaydetmesine izin vermez (tarayıcıda <code>getDisplayMedia</code> API'si kısıtlıdır).</p>
+        </div>
+
+        <h4 style="font-size: 14px; margin-bottom: 8px;">Nasıl Yansıtabilirsiniz?</h4>
+        <div class="guide-options">
+          <div class="guide-item">
+            <div class="guide-item-icon">📷</div>
+            <div class="guide-item-content">
+              <strong>Kamerayı TV'ye / Projeksiyona Yansıtın</strong>
+              <p>Telefon kamerasını canlı belge, slayt veya sunum kamerası olarak anında projeksiyona aktarın.</p>
+              <button id="startWithCameraBtn" class="btn btn-sm btn-primary">
+                <span>📷</span> Kamerayı Yansıt
+              </button>
+            </div>
+          </div>
+
+          <div class="guide-item">
+            <div class="guide-item-icon">📺</div>
+            <div class="guide-item-content">
+              <strong>Telefonun Yerel Yansıtma Özelliği</strong>
+              <p>Telefonunuzun üst bildirim çubuğunu kaydırın ve <b>Smart View</b>, <b>Yayınla (Cast)</b> veya <b>AirPlay</b> seçeneğine dokunun. Windows alıcı cihazınız otomatik bulunacaktır.</p>
+            </div>
+          </div>
+
+          <div class="guide-item">
+            <div class="guide-item-icon">💻</div>
+            <div class="guide-item-content">
+              <strong>Bilgisayardan Tam Ekran Paylaşın</strong>
+              <p>Windows veya Mac bilgisayarınızdan Chrome / Edge tarayıcısıyla <b id="guideHostSpan">bu adrese</b> girip PIN kodunu girerek 60 FPS tam ekran yayınlayabilirsiniz.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="dismissGuideModalBtn" class="btn btn-secondary">Kapat</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Switch Source Modal -->
+  <div id="switchSourceModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3><span>🔄</span> Yayın Kaynağını Değiştir</h3>
+        <button id="closeSwitchSourceModalBtn" class="btn-close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px;">
+          Bağlantıyı koparmadan yayınınızı anında farklı bir kameraya, ekrana veya belgeye aktarabilirsiniz:
+        </p>
+
+        <div class="source-options-grid">
+          <button id="optCameraBack" class="source-card-btn">
+            <div class="card-icon">📷</div>
+            <div class="card-content">
+              <strong>Arka Kamera (Belge & Sunum)</strong>
+              <span>Masadaki slaytı, belgeyi veya ortamı yansıtın</span>
+            </div>
+            <span class="card-badge" id="badgeCameraBack">Aktif</span>
+          </button>
+
+          <button id="optCameraFront" class="source-card-btn">
+            <div class="card-icon">🤳</div>
+            <div class="card-content">
+              <strong>Ön Kamera (Yüz / Konuşma)</strong>
+              <span>Ön kameranızı doğrudan yayına aktarın</span>
+            </div>
+            <span class="card-badge" id="badgeCameraFront">Aktif</span>
+          </button>
+
+          <button id="optScreen" class="source-card-btn">
+            <div class="card-icon">🖥️</div>
+            <div class="card-content">
+              <strong>Ekran / Sekme / Pencere</strong>
+              <span>Masaüstü, tarayıcı sekmesi veya uygulama ekranını paylaşın</span>
+            </div>
+            <span class="card-badge" id="badgeScreen">Aktif</span>
+          </button>
+
+          <button id="optDocument" class="source-card-btn">
+            <div class="card-icon">📄</div>
+            <div class="card-content">
+              <strong>Belge / Fotoğraf Yansıt</strong>
+              <span>Galerinizden resim veya belge seçip karşı ekranda gösterin</span>
+            </div>
+            <span class="card-badge" id="badgeDocument">Aktif</span>
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="dismissSwitchSourceModalBtn" class="btn btn-secondary">Kapat</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/sender.js?v=1.5.0"></script>
 </body>
 </html>

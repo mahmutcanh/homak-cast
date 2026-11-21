@@ -27,6 +27,29 @@
   const downloadCardIcon = document.getElementById('downloadCardIcon');
   const topDownloadBtn = document.getElementById('topDownloadBtn');
 
+  const streamSourceSelect = document.getElementById('streamSourceSelect');
+  const mobileScreenNotice = document.getElementById('mobileScreenNotice');
+  const mobileGuideModal = document.getElementById('mobileGuideModal');
+  const closeGuideModalBtn = document.getElementById('closeGuideModalBtn');
+  const dismissGuideModalBtn = document.getElementById('dismissGuideModalBtn');
+  const startWithCameraBtn = document.getElementById('startWithCameraBtn');
+
+  // Switch Source Elements
+  const switchSourceBtn = document.getElementById('switchSourceBtn');
+  const flipCameraBtn = document.getElementById('flipCameraBtn');
+  const documentFileInput = document.getElementById('documentFileInput');
+  const switchSourceModal = document.getElementById('switchSourceModal');
+  const closeSwitchSourceModalBtn = document.getElementById('closeSwitchSourceModalBtn');
+  const dismissSwitchSourceModalBtn = document.getElementById('dismissSwitchSourceModalBtn');
+  const optCameraBack = document.getElementById('optCameraBack');
+  const optCameraFront = document.getElementById('optCameraFront');
+  const optScreen = document.getElementById('optScreen');
+  const optDocument = document.getElementById('optDocument');
+  const badgeCameraBack = document.getElementById('badgeCameraBack');
+  const badgeCameraFront = document.getElementById('badgeCameraFront');
+  const badgeScreen = document.getElementById('badgeScreen');
+  const badgeDocument = document.getElementById('badgeDocument');
+
   // State
   let peerConnection = null;
   let localStream = null;
@@ -35,6 +58,8 @@
   let isAudioMuted = false;
   let iceServersConfig = [{ urls: 'stun:stun.l.google.com:19302' }];
   let deferredPwaPrompt = null;
+  let currentSourceMode = 'screen';
+  let documentCanvasInterval = null;
 
   // Register PWA Service Worker
   if ('serviceWorker' in navigator) {
@@ -50,11 +75,66 @@
     console.log('[PWA] Install prompt captured');
   });
 
-  // Read URL query param for prefilled PIN
+  // Collapsible Downloads Toggle
+  const toggleDownloadsBtn = document.getElementById('toggleDownloadsBtn');
+  const collapsibleDownloads = document.getElementById('collapsibleDownloads');
+  if (toggleDownloadsBtn && collapsibleDownloads) {
+    toggleDownloadsBtn.addEventListener('click', () => {
+      const isHidden = collapsibleDownloads.style.display === 'none';
+      collapsibleDownloads.style.display = isHidden ? 'block' : 'none';
+      toggleDownloadsBtn.innerHTML = isHidden 
+        ? `<span>💾</span> İndirme Seçeneklerini Gizle ▴` 
+        : `<span>💾</span> Windows Alıcıyı İndir veya Diğer Cihazlar ▾`;
+    });
+  }
+
+  // Dynamic host display in guide
+  const guideHostSpan = document.getElementById('guideHostSpan');
+  if (guideHostSpan) {
+    guideHostSpan.textContent = window.location.host;
+  }
+
+  // Automatic input formatting & Auto-connect on 6 digits
+  if (pinInput) {
+    pinInput.addEventListener('input', () => {
+      let raw = pinInput.value.replace(/\D/g, '').slice(0, 6);
+      if (raw.length > 3) {
+        pinInput.value = raw.slice(0, 3) + ' ' + raw.slice(3);
+      } else {
+        pinInput.value = raw;
+      }
+
+      if (raw.length === 6) {
+        connectBtn.classList.add('btn-ready');
+        // Auto connect after a 400ms pause if user types all 6 digits
+        setTimeout(() => {
+          if (pinInput.value.replace(/\D/g, '').length === 6 && !localStream && !peerConnection) {
+            connectBtn.click();
+          }
+        }, 400);
+      } else {
+        connectBtn.classList.remove('btn-ready');
+      }
+    });
+  }
+
+  // Read URL query param for prefilled PIN (from QR scan)
   const urlParams = new URLSearchParams(window.location.search);
   const codeFromUrl = urlParams.get('code');
-  if (codeFromUrl) {
-    pinInput.value = codeFromUrl.trim();
+  if (codeFromUrl && pinInput) {
+    const raw = codeFromUrl.replace(/\D/g, '').slice(0, 6);
+    if (raw.length === 6) {
+      pinInput.value = raw.slice(0, 3) + ' ' + raw.slice(3);
+      connectBtn.classList.add('btn-ready');
+      // Auto connect when opened from QR scan!
+      setTimeout(() => {
+        if (!localStream && !peerConnection) {
+          connectBtn.click();
+        }
+      }, 500);
+    } else {
+      pinInput.value = codeFromUrl.trim();
+    }
   }
 
   // --- Comprehensive Device & Model Detection ---
@@ -170,17 +250,31 @@
     detectedDeviceBadge.innerHTML = `<span class="device-icon">${clientInfo.icon}</span> ${clientInfo.displayName}`;
   }
 
+  const downloadPortableBtn = document.getElementById('downloadPortableBtn');
+
   if (downloadCardTitle && downloadCardDesc && downloadCardLink) {
     downloadCardIcon.textContent = clientInfo.icon;
     downloadCardTitle.textContent = `${clientInfo.model} Algılandı`;
     downloadCardDesc.textContent = clientInfo.downloadDesc;
-    downloadCardLink.href = clientInfo.downloadUrl;
-    downloadCardLink.innerHTML = `<span>⬇️</span> ${clientInfo.downloadLabel}`;
 
     if (clientInfo.downloadType === 'apk') {
+      downloadCardLink.href = '/download/android';
+      downloadCardLink.innerHTML = `<span>📱</span> Android (.apk)`;
       downloadCardLink.setAttribute('download', 'Homak-Cast.apk');
+      if (downloadPortableBtn) downloadPortableBtn.style.display = 'none';
     } else if (clientInfo.downloadType === 'exe') {
-      downloadCardLink.setAttribute('download', 'Homak-Cast-Receiver.exe');
+      downloadCardLink.href = '/download/setup';
+      downloadCardLink.innerHTML = `<span>💾</span> Alıcı Kurulum (.exe)`;
+      downloadCardLink.setAttribute('download', 'Homak-Cast-Setup.exe');
+      if (downloadPortableBtn) {
+        downloadPortableBtn.style.display = 'inline-flex';
+        downloadPortableBtn.href = '/download';
+        downloadPortableBtn.innerHTML = `<span>⚡</span> Portable (.exe)`;
+      }
+    } else {
+      downloadCardLink.href = clientInfo.downloadUrl;
+      downloadCardLink.innerHTML = `<span>⬇️</span> ${clientInfo.downloadLabel}`;
+      if (downloadPortableBtn) downloadPortableBtn.style.display = 'none';
     }
   }
 
@@ -222,6 +316,44 @@
     }
   });
 
+  // Helper: Capability Detection
+  function hasDisplayMediaSupport() {
+    return !!(navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function') ||
+           (typeof navigator.getDisplayMedia === 'function');
+  }
+
+  function isMobileClient() {
+    return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  }
+
+  function openGuideModal() {
+    if (mobileGuideModal) {
+      mobileGuideModal.style.display = 'flex';
+    }
+  }
+
+  function closeGuideModal() {
+    if (mobileGuideModal) {
+      mobileGuideModal.style.display = 'none';
+    }
+  }
+
+  if (closeGuideModalBtn) closeGuideModalBtn.addEventListener('click', closeGuideModal);
+  if (dismissGuideModalBtn) dismissGuideModalBtn.addEventListener('click', closeGuideModal);
+
+  if (startWithCameraBtn) {
+    startWithCameraBtn.addEventListener('click', () => {
+      closeGuideModal();
+      if (streamSourceSelect) streamSourceSelect.value = 'camera-back';
+      connectBtn.click();
+    });
+  }
+
+  // Pre-check capability on page load: show notice if mobile
+  if (isMobileClient()) {
+    if (mobileScreenNotice) mobileScreenNotice.style.display = 'block';
+  }
+
   // Pairing approved (Direct or after prompt)
   socket.on('pairing-approved', async (config) => {
     if (config.iceServers && config.iceServers.length > 0) {
@@ -240,12 +372,38 @@
     stopMediaTracks();
   });
 
+  let pendingSenderCandidates = [];
+  let disconnectTimer = null;
+
   // WebRTC Answer from Receiver
   socket.on('webrtc-answer', async ({ sdp }) => {
     if (peerConnection) {
       try {
         await peerConnection.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp }));
         console.log('[WebRTC] Remote description (answer) set successfully.');
+
+        // Drain buffered candidates
+        if (pendingSenderCandidates.length > 0) {
+          for (const cand of pendingSenderCandidates) {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+          }
+          pendingSenderCandidates = [];
+        }
+
+        // Apply encoding bitrate/fps safely after answer
+        const senders = peerConnection.getSenders();
+        const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+        if (videoSender && videoSender.getParameters) {
+          try {
+            const params = videoSender.getParameters();
+            if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
+            params.encodings[0].maxBitrate = 8000 * 1000;
+            params.encodings[0].maxFramerate = 60;
+            await videoSender.setParameters(params);
+          } catch (e) {
+            console.warn('[WebRTC] setParameters warning:', e);
+          }
+        }
       } catch (err) {
         console.error('Failed to set remote answer:', err);
       }
@@ -254,11 +412,16 @@
 
   // ICE Candidate from Receiver
   socket.on('webrtc-candidate', async (candidate) => {
-    if (peerConnection && candidate) {
-      try {
-        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-      } catch (err) {
-        console.error('Error adding ICE candidate:', err);
+    if (candidate) {
+      const candObj = candidate.candidate || candidate;
+      if (peerConnection && peerConnection.remoteDescription && peerConnection.remoteDescription.type) {
+        try {
+          await peerConnection.addIceCandidate(new RTCIceCandidate(candObj));
+        } catch (err) {
+          console.error('Error adding ICE candidate:', err);
+        }
+      } else {
+        pendingSenderCandidates.push(candObj);
       }
     }
   });
@@ -272,12 +435,43 @@
     handleStreamEnd('Alıcı cihazın bağlantısı koptu.');
   });
 
+  // Source Mode Toggle (Ekran vs Kamera)
+  const btnSourceScreen = document.getElementById('btnSourceScreen');
+  const btnSourceCamera = document.getElementById('btnSourceCamera');
+
+  if (btnSourceScreen && btnSourceCamera) {
+    btnSourceScreen.addEventListener('click', () => {
+      btnSourceScreen.classList.add('active');
+      btnSourceCamera.classList.remove('active');
+      if (streamSourceSelect) streamSourceSelect.value = 'screen';
+      currentSourceMode = 'screen';
+    });
+
+    btnSourceCamera.addEventListener('click', () => {
+      btnSourceCamera.classList.add('active');
+      btnSourceScreen.classList.remove('active');
+      if (streamSourceSelect) streamSourceSelect.value = 'camera-back';
+      currentSourceMode = 'camera-back';
+    });
+  }
+
   // Connect Button Click
   connectBtn.addEventListener('click', () => {
     const pin = pinInput.value.trim().replace(/\s+/g, '');
     if (!pin || pin.length !== 6) {
       showError('Lütfen 6 haneli geçerli eşleştirme kodunu girin.');
       return;
+    }
+
+    let selectedSource = streamSourceSelect ? streamSourceSelect.value : 'screen';
+    // Fall back to camera only if browser strictly lacks screen sharing API
+    if (!hasDisplayMediaSupport() && selectedSource === 'screen') {
+      selectedSource = 'camera-back';
+      if (streamSourceSelect) streamSourceSelect.value = 'camera-back';
+      if (btnSourceCamera && btnSourceScreen) {
+        btnSourceCamera.classList.add('active');
+        btnSourceScreen.classList.remove('active');
+      }
     }
 
     hideError();
@@ -290,7 +484,8 @@
       deviceName: clientInfo.displayName,
       model: clientInfo.model,
       os: clientInfo.os,
-      browser: clientInfo.browser
+      browser: clientInfo.browser,
+      sourceType: selectedSource
     }, (res) => {
       if (!res.ok) {
         showError(res.error);
@@ -313,35 +508,69 @@
     socket.emit('stop-stream');
   });
 
-  // Start Screen Sharing
+  // Start Screen or Camera Sharing
   async function startScreenShare(serverConfig = {}) {
     const targetFps = parseInt(fpsSelect.value, 10) || 60;
     const includeAudio = audioToggle.checked;
+    let selectedSource = streamSourceSelect ? streamSourceSelect.value : 'screen';
+    if (!hasDisplayMediaSupport() && selectedSource === 'screen') {
+      selectedSource = 'camera-back';
+      if (streamSourceSelect) streamSourceSelect.value = 'camera-back';
+    }
 
     try {
-      const displayMediaOptions = {
-        video: {
-          cursor: 'always',
-          frameRate: { ideal: targetFps, max: 60 },
-          width: { ideal: 1920, max: 3840 },
-          height: { ideal: 1080, max: 2160 }
-        },
-        audio: includeAudio ? {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false
-        } : false
-      };
+      if (selectedSource === 'camera-back' || selectedSource === 'camera-front') {
+        // Camera / Document Presenter Mode (fully supported on all mobile & desktop browsers)
+        const facing = selectedSource === 'camera-back' ? { ideal: 'environment' } : 'user';
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: facing,
+            width: { ideal: 1920, max: 3840 },
+            height: { ideal: 1080, max: 2160 },
+            frameRate: { ideal: targetFps }
+          },
+          audio: includeAudio
+        });
+      } else {
+        // Desktop Screen Sharing Mode
+        if (!hasDisplayMediaSupport()) {
+          if (isMobileClient()) {
+            openGuideModal();
+            handleStreamEnd();
+            return;
+          } else {
+            throw new Error('Tarayıcınız ekran yakalama API\'sini (getDisplayMedia) desteklemiyor. Lütfen güncel Chrome veya Edge kullanın.');
+          }
+        }
 
-      localStream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
-      localPreviewVideo.srcObject = localStream;
+        const displayMediaOptions = {
+          video: {
+            frameRate: { ideal: targetFps, max: 60 }
+          },
+          audio: includeAudio ? true : false
+        };
+
+        if (navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function') {
+          localStream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+        } else if (typeof navigator.getDisplayMedia === 'function') {
+          localStream = await navigator.getDisplayMedia(displayMediaOptions);
+        }
+      }
 
       videoTrack = localStream.getVideoTracks()[0];
+      if (videoTrack && 'contentHint' in videoTrack) {
+        videoTrack.contentHint = 'motion';
+      }
       audioTrack = localStream.getAudioTracks()[0] || null;
+
+      localPreviewVideo.srcObject = localStream;
+      localPreviewVideo.play().catch(e => {});
+      localPreviewVideo.muted = true;
+      localPreviewVideo.play().catch(e => console.warn('Preview play warning:', e));
 
       // When user clicks the native "Stop Sharing" button
       videoTrack.onended = () => {
-        handleStreamEnd('Ekran paylaşımı durduruldu.');
+        handleStreamEnd('Yayın durduruldu.');
         socket.emit('stop-stream');
       };
 
@@ -352,15 +581,7 @@
 
       // Add tracks to PeerConnection
       localStream.getTracks().forEach((track) => {
-        const sender = peerConnection.addTrack(track, localStream);
-
-        if (track.kind === 'video' && sender && sender.getParameters) {
-          const params = sender.getParameters();
-          if (!params.encodings) params.encodings = [{}];
-          params.encodings[0].maxBitrate = (serverConfig.maxBitrateKbps || 8000) * 1000;
-          params.encodings[0].maxFramerate = targetFps;
-          sender.setParameters(params).catch(() => {});
-        }
+        peerConnection.addTrack(track, localStream);
       });
 
       peerConnection.onicecandidate = (event) => {
@@ -371,8 +592,17 @@
 
       peerConnection.onconnectionstatechange = () => {
         console.log('[WebRTC] Connection state:', peerConnection.connectionState);
-        if (peerConnection.connectionState === 'disconnected' || peerConnection.connectionState === 'failed') {
-          handleStreamEnd('WebRTC bağlantısı kesildi.');
+        const state = peerConnection.connectionState;
+        clearTimeout(disconnectTimer);
+        if (state === 'failed') {
+          handleStreamEnd('WebRTC bağlantısı kurulamadı (ağ/firewall engeli olabilir).');
+        } else if (state === 'disconnected') {
+          // 'disconnected' is often transient; give ICE a few seconds to recover.
+          disconnectTimer = setTimeout(() => {
+            if (peerConnection && peerConnection.connectionState === 'disconnected') {
+              handleStreamEnd('WebRTC bağlantısı kesildi.');
+            }
+          }, 8000);
         }
       };
 
@@ -405,6 +635,214 @@
       showError('Ekran paylaşımı başlatılamadı: ' + err.message);
       handleStreamEnd();
     }
+  }
+
+  // Switch Source Logic (Seamless replaceTrack without disconnection)
+  function openSwitchSourceModal() {
+    if (!switchSourceModal) return;
+    updateActiveSourceBadges(currentSourceMode);
+    switchSourceModal.style.display = 'flex';
+  }
+
+  function closeSwitchSourceModal() {
+    if (switchSourceModal) {
+      switchSourceModal.style.display = 'none';
+    }
+  }
+
+  if (switchSourceBtn) switchSourceBtn.addEventListener('click', openSwitchSourceModal);
+  if (closeSwitchSourceModalBtn) closeSwitchSourceModalBtn.addEventListener('click', closeSwitchSourceModal);
+  if (dismissSwitchSourceModalBtn) dismissSwitchSourceModalBtn.addEventListener('click', closeSwitchSourceModal);
+
+  function updateActiveSourceBadges(mode) {
+    const list = [
+      { btn: optCameraBack, badge: badgeCameraBack, key: 'camera-back' },
+      { btn: optCameraFront, badge: badgeCameraFront, key: 'camera-front' },
+      { btn: optScreen, badge: badgeScreen, key: 'screen' },
+      { btn: optDocument, badge: badgeDocument, key: 'document' }
+    ];
+    list.forEach(item => {
+      if (!item.btn) return;
+      if (item.key === mode) {
+        item.btn.classList.add('active-source');
+      } else {
+        item.btn.classList.remove('active-source');
+      }
+    });
+  }
+
+  async function replaceLiveVideoTrack(newVideoTrack, newMode) {
+    if (!peerConnection) return;
+
+    if (documentCanvasInterval) {
+      clearInterval(documentCanvasInterval);
+      documentCanvasInterval = null;
+    }
+
+    try {
+      const senders = peerConnection.getSenders();
+      const videoSender = senders.find(s => s.track && s.track.kind === 'video') ||
+                          senders.find(s => s.track === null);
+
+      if (videoSender) {
+        await videoSender.replaceTrack(newVideoTrack);
+        console.log(`[WebRTC] Video track replaced with ${newMode} seamlessly without disconnect!`);
+      }
+
+      // Stop old video track if distinct
+      if (videoTrack && videoTrack !== newVideoTrack) {
+        videoTrack.stop();
+      }
+
+      videoTrack = newVideoTrack;
+      currentSourceMode = newMode;
+
+      // Update local preview
+      if (localStream) {
+        const oldTracks = localStream.getVideoTracks();
+        oldTracks.forEach(t => localStream.removeTrack(t));
+        localStream.addTrack(newVideoTrack);
+      } else {
+        localStream = new MediaStream([newVideoTrack]);
+      }
+      localPreviewVideo.srcObject = localStream;
+      localPreviewVideo.play().catch(e => {});
+
+      videoTrack.onended = () => {
+        console.log(`[Source] Track ${newMode} ended`);
+      };
+
+      const settings = videoTrack.getSettings();
+      statRes.textContent = `${settings.width || 1920}x${settings.height || 1080}`;
+      updateActiveSourceBadges(newMode);
+      closeSwitchSourceModal();
+    } catch (err) {
+      console.error('Failed to replace video track:', err);
+      alert('Kaynak değiştirilemedi: ' + err.message);
+    }
+  }
+
+  async function switchLiveSource(targetMode) {
+    if (targetMode === 'document') {
+      if (documentFileInput) documentFileInput.click();
+      return;
+    }
+
+    try {
+      const targetFps = parseInt(fpsSelect.value, 10) || 60;
+
+      if (targetMode === 'camera-back' || targetMode === 'camera-front') {
+        const facing = targetMode === 'camera-back' ? { ideal: 'environment' } : 'user';
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: facing,
+            width: { ideal: 1920, max: 3840 },
+            height: { ideal: 1080, max: 2160 },
+            frameRate: { ideal: targetFps }
+          },
+          audio: false
+        });
+        const track = stream.getVideoTracks()[0];
+        await replaceLiveVideoTrack(track, targetMode);
+      } else if (targetMode === 'screen') {
+        if (!hasDisplayMediaSupport()) {
+          alert('Mobil tarayıcınız web üzerinden tüm telefon ekranını yakalamayı güvenlik nedeniyle desteklemiyor. Kamera veya Belge modunu kullanabilirsiniz.');
+          return;
+        }
+        let stream = null;
+        if (navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function') {
+          stream = await navigator.mediaDevices.getDisplayMedia({
+            video: { cursor: 'always', frameRate: { ideal: targetFps, max: 60 } },
+            audio: false
+          });
+        } else if (typeof navigator.getDisplayMedia === 'function') {
+          stream = await navigator.getDisplayMedia({
+            video: { cursor: 'always', frameRate: { ideal: targetFps, max: 60 } },
+            audio: false
+          });
+        }
+        if (stream) {
+          const track = stream.getVideoTracks()[0];
+          await replaceLiveVideoTrack(track, 'screen');
+        }
+      }
+    } catch (err) {
+      console.error('Source switch error:', err);
+      alert('Kaynak değiştirilemedi: ' + err.message);
+    }
+  }
+
+  if (optCameraBack) optCameraBack.addEventListener('click', () => switchLiveSource('camera-back'));
+  if (optCameraFront) optCameraFront.addEventListener('click', () => switchLiveSource('camera-front'));
+  if (optScreen) optScreen.addEventListener('click', () => switchLiveSource('screen'));
+  if (optDocument) optDocument.addEventListener('click', () => switchLiveSource('document'));
+
+  if (flipCameraBtn) {
+    flipCameraBtn.addEventListener('click', async () => {
+      if (currentSourceMode === 'camera-back') {
+        await switchLiveSource('camera-front');
+      } else {
+        await switchLiveSource('camera-back');
+      }
+    });
+  }
+
+  // Document / Image live casting handler
+  if (documentFileInput) {
+    documentFileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        const objectUrl = URL.createObjectURL(file);
+        const img = new Image();
+        img.src = objectUrl;
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+        });
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 1920;
+        canvas.height = 1080;
+        const ctx = canvas.getContext('2d');
+
+        const drawFrame = () => {
+          ctx.fillStyle = '#0a0e17';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
+          const w = img.width * scale;
+          const h = img.height * scale;
+          const x = (canvas.width - w) / 2;
+          const y = (canvas.height - h) / 2;
+          ctx.drawImage(img, x, y, w, h);
+
+          // Subtitle banner at bottom
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          ctx.fillRect(0, canvas.height - 44, canvas.width, 44);
+          ctx.fillStyle = '#00f0ff';
+          ctx.font = 'bold 20px sans-serif';
+          ctx.fillText(`📄 Belge / Görsel: ${file.name}`, 30, canvas.height - 15);
+        };
+
+        drawFrame();
+        const canvasStream = canvas.captureStream(25);
+        documentCanvasInterval = setInterval(drawFrame, 200);
+
+        const canvasTrack = canvasStream.getVideoTracks()[0];
+        canvasTrack.onended = () => {
+          if (documentCanvasInterval) clearInterval(documentCanvasInterval);
+        };
+
+        await replaceLiveVideoTrack(canvasTrack, 'document');
+        closeSwitchSourceModal();
+      } catch (err) {
+        console.error('Document file load error:', err);
+        alert('Dosya gösterilemedi: ' + err.message);
+      } finally {
+        documentFileInput.value = '';
+      }
+    });
   }
 
   // Audio Toggle
@@ -456,6 +894,107 @@
   function showError(msg) {
     pinError.textContent = msg;
     pinError.style.display = 'block';
+  }
+
+  // Annotation & Laser Pointer Controls
+  const toggleLaserBtn = document.getElementById('toggleLaserBtn');
+  const toggleDrawBtn = document.getElementById('toggleDrawBtn');
+  const clearAnnotationBtn = document.getElementById('clearAnnotationBtn');
+  const pointerTouchLayer = document.getElementById('pointerTouchLayer');
+
+  let activeTool = null; // 'laser' or 'draw' or null
+  let isDrawing = false;
+  let lastDrawCoord = null;
+
+  if (toggleLaserBtn && pointerTouchLayer) {
+    toggleLaserBtn.addEventListener('click', () => {
+      if (activeTool === 'laser') {
+        activeTool = null;
+        toggleLaserBtn.classList.remove('btn-tool-active');
+        pointerTouchLayer.style.display = 'none';
+      } else {
+        activeTool = 'laser';
+        toggleLaserBtn.classList.add('btn-tool-active');
+        if (toggleDrawBtn) toggleDrawBtn.classList.remove('btn-tool-active');
+        pointerTouchLayer.style.display = 'block';
+      }
+    });
+  }
+
+  if (toggleDrawBtn && pointerTouchLayer) {
+    toggleDrawBtn.addEventListener('click', () => {
+      if (activeTool === 'draw') {
+        activeTool = null;
+        toggleDrawBtn.classList.remove('btn-tool-active');
+        pointerTouchLayer.style.display = 'none';
+      } else {
+        activeTool = 'draw';
+        toggleDrawBtn.classList.add('btn-tool-active');
+        if (toggleLaserBtn) toggleLaserBtn.classList.remove('btn-tool-active');
+        pointerTouchLayer.style.display = 'block';
+      }
+    });
+  }
+
+  if (clearAnnotationBtn) {
+    clearAnnotationBtn.addEventListener('click', () => {
+      socket.emit('stream-annotation', { type: 'clear' });
+    });
+  }
+
+  function getNormCoords(e, rect) {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const y = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+    return { x, y };
+  }
+
+  if (pointerTouchLayer) {
+    const onPointerMove = (e) => {
+      if (!activeTool) return;
+      const rect = pointerTouchLayer.getBoundingClientRect();
+      const coords = getNormCoords(e, rect);
+
+      if (activeTool === 'laser') {
+        socket.emit('stream-annotation', { type: 'laser', x: coords.x, y: coords.y });
+      } else if (activeTool === 'draw' && isDrawing && lastDrawCoord) {
+        socket.emit('stream-annotation', {
+          type: 'draw',
+          x0: lastDrawCoord.x,
+          y0: lastDrawCoord.y,
+          x1: coords.x,
+          y1: coords.y,
+          color: '#ff1744',
+          size: 4
+        });
+        lastDrawCoord = coords;
+      }
+    };
+
+    const onPointerStart = (e) => {
+      if (!activeTool) return;
+      isDrawing = true;
+      const rect = pointerTouchLayer.getBoundingClientRect();
+      const coords = getNormCoords(e, rect);
+      lastDrawCoord = coords;
+      if (activeTool === 'laser') {
+        socket.emit('stream-annotation', { type: 'laser', x: coords.x, y: coords.y });
+      }
+    };
+
+    const onPointerEnd = () => {
+      isDrawing = false;
+      lastDrawCoord = null;
+    };
+
+    pointerTouchLayer.addEventListener('mousedown', onPointerStart);
+    pointerTouchLayer.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('mouseup', onPointerEnd);
+
+    pointerTouchLayer.addEventListener('touchstart', onPointerStart, { passive: true });
+    pointerTouchLayer.addEventListener('touchmove', onPointerMove, { passive: true });
+    window.addEventListener('touchend', onPointerEnd);
   }
 
   function hideError() {

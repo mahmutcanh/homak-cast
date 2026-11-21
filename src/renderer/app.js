@@ -5,9 +5,9 @@
   const standbyView = document.getElementById('standbyView');
   const streamingView = document.getElementById('streamingView');
   const desktopSenderView = document.getElementById('desktopSenderView');
+  const videoGrid = document.getElementById('videoGrid');
 
   // Receiver Elements
-  const remoteVideo = document.getElementById('remoteVideo');
   const pinCode = document.getElementById('pinCode');
   const qrImage = document.getElementById('qrImage');
   const connectUrlText = document.getElementById('connectUrlText');
@@ -24,6 +24,22 @@
   const floatingMuteBtn = document.getElementById('floatingMuteBtn');
   const floatingFullscreenBtn = document.getElementById('floatingFullscreenBtn');
   const disconnectCastBtn = document.getElementById('disconnectCastBtn');
+  const floatingPinBadge = document.getElementById('floatingPinBadge');
+  const watermarkPinText = document.getElementById('watermarkPinText');
+  const watermarkCountText = document.getElementById('watermarkCountText');
+  const watermarkDomainText = document.getElementById('watermarkDomainText');
+  const stepDomainText = document.getElementById('stepDomainText');
+  const bottomCloudDomainText = document.getElementById('bottomCloudDomainText');
+  const btnModeCloud = document.getElementById('btnModeCloud');
+  const btnModeLan = document.getElementById('btnModeLan');
+  const floatingRecordBtn = document.getElementById('floatingRecordBtn');
+  const recordBtnIcon = document.getElementById('recordBtnIcon');
+  const recordBtnText = document.getElementById('recordBtnText');
+  const recordingIndicatorBadge = document.getElementById('recordingIndicatorBadge');
+  const recordingTimer = document.getElementById('recordingTimer');
+  const floatingClearDrawBtn = document.getElementById('floatingClearDrawBtn');
+  const annotationCanvas = document.getElementById('annotationCanvas');
+  const lanIpText = document.getElementById('lanIpText');
 
   // Desktop Sender Elements
   const desktopCastForm = document.getElementById('desktopCastForm');
@@ -54,28 +70,51 @@
   const settingPort = document.getElementById('settingPort');
   const settingRequireApproval = document.getElementById('settingRequireApproval');
   const settingAutoStart = document.getElementById('settingAutoStart');
+  const settingShowHeaderInFullscreen = document.getElementById('settingShowHeaderInFullscreen');
   const settingFps = document.getElementById('settingFps');
   const settingStunServers = document.getElementById('settingStunServers');
   const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+  const openRecordingsBtn = document.getElementById('openRecordingsBtn');
+  const topNav = document.getElementById('topNav');
 
   // State
   let socket = null;
-  let receiverPeerConnection = null;
+  // Multi-peer map: senderId -> { pc, stream, tile, senderInfo, videoEl }
+  const activePeers = new Map();
   let senderPeerConnection = null;
   let outgoingStream = null;
-  let remoteStream = null;
   let currentSettings = {};
   let currentPin = '';
-  let activeSenderId = null;
+  let activePendingApprovalSenderId = null;
   let approvalTimer = null;
   let selectedAudioDeviceId = 'default';
   let appMode = 'receiver'; // 'receiver' or 'sender'
+  let isFullscreenState = false;
+  let isStreamingState = false;
+  let activeAddressMode = 'cloud'; // 'cloud' or 'lan'
+  let cloudBaseUrl = 'https://cast.homaklab.com';
+  let lanBaseUrl = '';
+  let activeConnectUrl = '';
+
+  // Recording State
+  let mediaRecorder = null;
+  let recordedChunks = [];
+  let recordingTimerInterval = null;
+  let recordingStartTime = 0;
+
+  // Laser Pointer & Annotation State
+  let animContext = null;
+  let laserPoint = null; // { x, y, lastTime }
+  let animFrameId = null;
 
   // Initialize
   async function init() {
+    initCanvas();
+
     currentSettings = await window.electronAPI.getSettings();
+    const port = currentSettings.port || 5240;
+    const localFallbackUrl = `http://localhost:${port}`;
     const serverUrl = currentSettings.signalingServerUrl || 'https://cast.homaklab.com';
-    const localFallbackUrl = `http://localhost:${currentSettings.port || 5240}`;
 
     console.log(`[Receiver] Connecting to signaling server: ${serverUrl}`);
     socket = io(serverUrl, { timeout: 5000, reconnectionAttempts: 3 });
@@ -101,7 +140,137 @@
     setupDisplays();
     setupAudioDevices();
     setupDesktopSenderSources();
+    setupLanAddressInfo();
     setupUIEvents();
+  }
+
+  function initCanvas() {
+    if (!annotationCanvas) return;
+    annotationCanvas.width = window.innerWidth;
+    annotationCanvas.height = window.innerHeight;
+    animContext = annotationCanvas.getContext('2d');
+
+    window.addEventListener('resize', () => {
+      annotationCanvas.width = window.innerWidth;
+      annotationCanvas.height = window.innerHeight;
+    });
+
+    // Start laser render loop
+    function renderLaser() {
+      if (laserPoint && animContext) {
+        const now = Date.now();
+        const age = now - laserPoint.lastTime;
+        if (age < 1200) {
+          // Draw laser glow
+          const px = laserPoint.x * annotationCanvas.width;
+          const py = laserPoint.y * annotationCanvas.height;
+          const alpha = Math.max(0, 1 - (age / 1200));
+
+          animContext.save();
+          animContext.beginPath();
+          const radGrad = animContext.createRadialGradient(px, py, 2, px, py, 22);
+          radGrad.addColorStop(0, `rgba(255, 23, 68, ${alpha})`);
+          radGrad.addColorStop(0.4, `rgba(255, 61, 0, ${alpha * 0.7})`);
+          radGrad.addColorStop(1, 'rgba(255, 61, 0, 0)');
+          animContext.fillStyle = radGrad;
+          animContext.arc(px, py, 22, 0, Math.PI * 2);
+          animContext.fill();
+
+          // Bright laser core
+          animContext.beginPath();
+          animContext.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+          animContext.arc(px, py, 4, 0, Math.PI * 2);
+          animContext.fill();
+          animContext.restore();
+        } else {
+          laserPoint = null;
+        }
+      }
+      animFrameId = requestAnimationFrame(renderLaser);
+    }
+    renderLaser();
+  }
+
+  function clearCanvas() {
+    if (animContext && annotationCanvas) {
+      animContext.clearRect(0, 0, annotationCanvas.width, annotationCanvas.height);
+      laserPoint = null;
+    }
+  }
+
+  function getCleanHost(urlStr) {
+    if (!urlStr) return '';
+    try {
+      const u = new URL(urlStr);
+      return u.host;
+    } catch (e) {
+      return urlStr.replace(/^https?:\/\//i, '').split('/')[0];
+    }
+  }
+
+  function refreshActiveAddressUI() {
+    if (!currentPin) return;
+
+    const port = currentSettings.port || 5240;
+    cloudBaseUrl = 'https://cast.homaklab.com';
+    let targetBaseUrl = 'https://cast.homaklab.com';
+    if (activeAddressMode === 'lan' && lanBaseUrl) {
+      targetBaseUrl = lanBaseUrl;
+    }
+    targetBaseUrl = targetBaseUrl.replace(/\/+$/, '');
+    const cleanHost = getCleanHost(targetBaseUrl);
+    activeConnectUrl = `${targetBaseUrl}/?code=${currentPin}`;
+
+    if (stepDomainText) stepDomainText.textContent = cleanHost;
+    if (connectUrlText) connectUrlText.textContent = activeConnectUrl;
+    if (watermarkDomainText) watermarkDomainText.textContent = cleanHost;
+    if (bottomCloudDomainText) bottomCloudDomainText.textContent = 'cast.homaklab.com';
+    if (lanIpText && lanBaseUrl) lanIpText.textContent = lanBaseUrl;
+
+    if (btnModeCloud && btnModeLan) {
+      if (activeAddressMode === 'lan') {
+        btnModeLan.classList.add('active');
+        btnModeCloud.classList.remove('active');
+      } else {
+        btnModeCloud.classList.add('active');
+        btnModeLan.classList.remove('active');
+      }
+    }
+
+    // Generate high-contrast QR code for the exact active URL
+    const fetchApiBase = 'https://cast.homaklab.com';
+    fetch(`${fetchApiBase}/api/qr?code=${currentPin}&url=${encodeURIComponent(activeConnectUrl)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data && data.ok && data.qr) {
+          qrImage.src = data.qr;
+        }
+      })
+      .catch(() => {
+        fetch(`http://localhost:${port}/api/qr?code=${currentPin}&url=${encodeURIComponent(activeConnectUrl)}`)
+          .then(r => r.json())
+          .then(data => {
+            if (data && data.ok && data.qr) qrImage.src = data.qr;
+          })
+          .catch(err => console.warn('QR error:', err));
+      });
+  }
+
+  async function setupLanAddressInfo() {
+    try {
+      const addresses = await window.electronAPI.getNetworkAddresses();
+      const port = currentSettings.port || 5240;
+      // Prefer real LAN IP (192.168.x.x or 10.x.x) over container/virtual adapters
+      const lan = addresses.find(a => a.isLocal && a.address.startsWith('192.168.')) ||
+                  addresses.find(a => a.isLocal && !a.address.startsWith('172.') && !a.address.startsWith('10.77.')) ||
+                  addresses.find(a => a.isLocal) || addresses[0];
+      if (lan) {
+        lanBaseUrl = `http://${lan.address}:${port}`;
+        if (lanIpText) lanIpText.textContent = lanBaseUrl;
+      }
+    } catch (e) {
+      console.warn('Could not get network addresses:', e);
+    }
   }
 
   function registerWithServer() {
@@ -123,33 +292,66 @@
 
     // Approval Request
     socket.on('approval-request', ({ senderId, senderInfo }) => {
-      activeSenderId = senderId;
+      activePendingApprovalSenderId = senderId;
       showApprovalModal(senderInfo);
     });
 
     // Sender Connected (Receiver role)
-    socket.on('sender-connected', ({ senderInfo, iceServers }) => {
-      let label = senderInfo.model || senderInfo.deviceName || 'Bilinmeyen Cihaz';
-      if (senderInfo.os && !label.includes(senderInfo.os)) {
-        label += ` (${senderInfo.os})`;
-      }
-      activeSenderName.textContent = label;
-      console.log(`[Receiver] Connected sender: ${label} [${senderInfo.ip || ''}]`);
-      setupReceiverPeerConnection(iceServers);
+    socket.on('sender-connected', ({ senderId, senderInfo, iceServers }) => {
+      console.log(`[Receiver] Sender connected: ${senderId}`, senderInfo);
+      setupPeerConnectionForSender(senderId, senderInfo, iceServers);
     });
 
     // WebRTC Offer from Sender
     socket.on('webrtc-offer', async ({ sdp, senderId }) => {
-      if (!receiverPeerConnection) return;
+      const peer = activePeers.get(senderId);
+      if (!peer || !peer.pc) return;
       try {
-        await receiverPeerConnection.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp }));
-        const answer = await receiverPeerConnection.createAnswer();
-        await receiverPeerConnection.setLocalDescription(answer);
+        await peer.pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp }));
 
-        socket.emit('webrtc-answer', { sdp: answer.sdp });
-        console.log('[WebRTC] Answer sent to sender.');
+        // Drain any early buffered candidates
+        if (peer.pendingCandidates && peer.pendingCandidates.length > 0) {
+          for (const cand of peer.pendingCandidates) {
+            await peer.pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+          }
+          peer.pendingCandidates = [];
+        }
+
+        const answer = await peer.pc.createAnswer();
+        await peer.pc.setLocalDescription(answer);
+
+        socket.emit('webrtc-answer', { sdp: answer.sdp, senderId });
+        console.log(`[WebRTC] Answer sent to sender ${senderId}.`);
       } catch (err) {
         console.error('Error handling WebRTC offer:', err);
+      }
+    });
+
+    // WebRTC Candidate
+    socket.on('webrtc-candidate', async (data) => {
+      if (appMode === 'sender') {
+        if (senderPeerConnection && data.candidate) {
+          try {
+            await senderPeerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+          } catch (err) {
+            console.error('Error adding ICE candidate (sender):', err);
+          }
+        }
+      } else {
+        const senderId = data.senderId;
+        const peer = activePeers.get(senderId);
+        if (peer && peer.pc && data.candidate) {
+          try {
+            if (peer.pc.remoteDescription && peer.pc.remoteDescription.type) {
+              await peer.pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+            } else {
+              if (!peer.pendingCandidates) peer.pendingCandidates = [];
+              peer.pendingCandidates.push(data.candidate);
+            }
+          } catch (err) {
+            console.error('Error adding ICE candidate (receiver):', err);
+          }
+        }
       }
     });
 
@@ -165,26 +367,53 @@
       }
     });
 
-    // WebRTC Candidate
-    socket.on('webrtc-candidate', async (candidate) => {
-      const pc = appMode === 'sender' ? senderPeerConnection : receiverPeerConnection;
-      if (pc && candidate) {
-        try {
-          await pc.addIceCandidate(new RTCIceCandidate(candidate));
-        } catch (err) {
-          console.error('Error adding ICE candidate:', err);
-        }
+    // Stream Annotation / Laser Pointer Event
+    socket.on('stream-annotation', (data) => {
+      if (!animContext) return;
+      if (data.type === 'laser') {
+        laserPoint = { x: data.x, y: data.y, lastTime: Date.now() };
+      } else if (data.type === 'draw') {
+        animContext.save();
+        animContext.strokeStyle = data.color || '#ff1744';
+        animContext.lineWidth = data.size || 4;
+        animContext.lineCap = 'round';
+        animContext.beginPath();
+        animContext.moveTo(data.x0 * annotationCanvas.width, data.y0 * annotationCanvas.height);
+        animContext.lineTo(data.x1 * annotationCanvas.width, data.y1 * annotationCanvas.height);
+        animContext.stroke();
+        animContext.restore();
+      } else if (data.type === 'clear') {
+        clearCanvas();
       }
     });
 
-    // Stream Termination
-    socket.on('stream-terminated', ({ reason }) => {
-      console.log('[HomakCast] Stream terminated:', reason);
+    // Individual sender disconnected (Split-screen)
+    socket.on('sender-disconnected', ({ senderId, remainingStreams }) => {
+      console.log(`[Receiver] Sender ${senderId} disconnected. Remaining: ${remainingStreams}`);
+      removeSenderTile(senderId);
+    });
+
+    // All streams ended
+    socket.on('all-streams-ended', ({ reason }) => {
+      console.log('[Receiver] All streams ended:', reason);
       if (appMode === 'sender') {
         stopDesktopOutgoingCast('Yayın alıcı tarafından sonlandırıldı.');
       } else {
         returnToStandbyView();
       }
+    });
+
+    // Desktop sender events
+    socket.on('pairing-approved', async (config) => {
+      if (appMode !== 'sender') return;
+      desktopCastInfo.style.display = 'none';
+      await startOutgoingStream(config);
+    });
+
+    socket.on('pairing-rejected', ({ reason }) => {
+      if (appMode !== 'sender') return;
+      showDesktopError(reason || 'Karşı cihaz yayını kabul etmedi.');
+      stopDesktopOutgoingCast();
     });
   }
 
@@ -193,83 +422,286 @@
     currentPin = pin;
     const formattedPin = pin.slice(0, 3) + ' ' + pin.slice(3);
     pinCode.textContent = formattedPin;
-
-    if (qrUrl) {
-      connectUrlText.textContent = qrUrl;
-      const baseUrl = currentSettings.signalingServerUrl || 'https://cast.homaklab.com';
-      fetch(`${baseUrl}/api/qr?code=${pin}`)
-        .then(r => r.json())
-        .then(data => {
-          if (data.ok && data.qr) {
-            qrImage.src = data.qr;
-          }
-        })
-        .catch(err => {
-          console.error('Failed to load QR code image from server:', err);
-        });
-    }
+    if (watermarkPinText) watermarkPinText.textContent = `PIN: ${formattedPin}`;
+    cloudBaseUrl = 'https://cast.homaklab.com';
+    activeAddressMode = 'cloud';
+    refreshActiveAddressUI();
   }
 
-  // --- RECEIVER WebRTC ---
-  function setupReceiverPeerConnection(iceServers) {
-    if (receiverPeerConnection) {
-      receiverPeerConnection.close();
-      receiverPeerConnection = null;
+  // --- MULTI-SCREEN RECEIVER WebRTC ---
+  function setupPeerConnectionForSender(senderId, senderInfo, iceServers) {
+    // If peer already exists, close it
+    if (activePeers.has(senderId)) {
+      const old = activePeers.get(senderId);
+      if (old.pc) old.pc.close();
+      if (old.tile && old.tile.parentNode) old.tile.parentNode.removeChild(old.tile);
+      activePeers.delete(senderId);
     }
 
-    remoteStream = new MediaStream();
-    remoteVideo.srcObject = remoteStream;
-
-    receiverPeerConnection = new RTCPeerConnection({
+    const pc = new RTCPeerConnection({
       iceServers: iceServers || [{ urls: 'stun:stun.l.google.com:19302' }]
     });
 
-    receiverPeerConnection.ontrack = (event) => {
-      console.log('[Receiver WebRTC] Remote track received:', event.track.kind);
-      remoteStream.addTrack(event.track);
+    const stream = new MediaStream();
+
+    // Create Tile in Video Grid
+    const tile = document.createElement('div');
+    tile.className = 'video-tile';
+    tile.id = `tile-${senderId}`;
+
+    const videoEl = document.createElement('video');
+    videoEl.autoplay = true;
+    videoEl.playsInline = true;
+    videoEl.muted = false;
+    tile.appendChild(videoEl);
+
+    // Label tag
+    const tag = document.createElement('div');
+    tag.className = 'tile-tag';
+    let label = senderInfo.model || senderInfo.deviceName || 'Cihaz';
+    if (senderInfo.os && !label.includes(senderInfo.os)) label += ` (${senderInfo.os})`;
+    tag.innerHTML = `<span class="dot-green"></span> ${label}`;
+    tile.appendChild(tag);
+
+    // Remove primary placeholder if present
+    const primaryTile = document.getElementById('tile-primary');
+    if (primaryTile && primaryTile.parentNode) {
+      primaryTile.parentNode.removeChild(primaryTile);
+    }
+
+    videoGrid.appendChild(tile);
+
+    activePeers.set(senderId, { pc, stream, tile, senderInfo, videoEl, pendingCandidates: [] });
+    updateVideoGridLayout();
+
+    // Track handling
+    pc.ontrack = (event) => {
+      console.log(`[Receiver] Track from ${senderId}:`, event.track.kind);
+      
+      const incomingStream = (event.streams && event.streams[0]) ? event.streams[0] : stream;
+      if (!event.streams || !event.streams[0]) {
+        stream.addTrack(event.track);
+      }
+      videoEl.srcObject = incomingStream;
+
+      const playVideo = () => {
+        const p = videoEl.play();
+        if (p !== undefined) {
+          p.catch(err => {
+            console.warn('[Receiver] Autoplay blocked, retrying muted:', err);
+            videoEl.muted = true;
+            videoEl.play().catch(e => console.error('[Receiver] Play failed:', e));
+          });
+        }
+      };
+
+      playVideo();
+      videoEl.onloadedmetadata = () => playVideo();
 
       switchToStreamingView();
-      applyAudioOutput(selectedAudioDeviceId);
+      applyAudioOutputToVideo(videoEl, selectedAudioDeviceId);
 
       if (event.track.kind === 'video') {
         event.track.onloadedmetadata = () => {
+          playVideo();
           const s = event.track.getSettings();
-          liveResolution.textContent = `${s.width || 1920}x${s.height || 1080}`;
-          liveFps.textContent = `${s.frameRate || 60} FPS`;
+          if (liveResolution) liveResolution.textContent = `${s.width || 1920}x${s.height || 1080}`;
+          if (liveFps) liveFps.textContent = `${s.frameRate || 60} FPS`;
         };
       }
     };
 
-    receiverPeerConnection.onicecandidate = (event) => {
+    pc.onicecandidate = (event) => {
       if (event.candidate) {
-        socket.emit('webrtc-candidate', { candidate: event.candidate });
+        socket.emit('webrtc-candidate', { candidate: event.candidate, senderId });
       }
     };
 
-    receiverPeerConnection.onconnectionstatechange = () => {
-      if (receiverPeerConnection.connectionState === 'disconnected' || receiverPeerConnection.connectionState === 'failed') {
-        returnToStandbyView();
+    pc.onconnectionstatechange = () => {
+      const state = pc.connectionState;
+      if (state === 'failed') {
+        removeSenderTile(senderId);
+      } else if (state === 'disconnected') {
+        // Transient disconnects often recover; wait before dropping the tile.
+        setTimeout(() => {
+          const peer = activePeers.get(senderId);
+          if (peer && peer.pc === pc && pc.connectionState === 'disconnected') {
+            removeSenderTile(senderId);
+          }
+        }, 8000);
       }
     };
   }
 
-  function switchToStreamingView() {
+  function removeSenderTile(senderId) {
+    const peer = activePeers.get(senderId);
+    if (peer) {
+      if (peer.pc) peer.pc.close();
+      if (peer.tile && peer.tile.parentNode) peer.tile.parentNode.removeChild(peer.tile);
+      activePeers.delete(senderId);
+    }
+
+    updateVideoGridLayout();
+
+    if (activePeers.size === 0) {
+      returnToStandbyView();
+    }
+  }
+
+  function updateVideoGridLayout() {
+    const count = activePeers.size;
+    videoGrid.className = 'video-grid';
+    if (count <= 1) {
+      videoGrid.classList.add('grid-1');
+    } else if (count === 2) {
+      videoGrid.classList.add('grid-2');
+    } else if (count === 3) {
+      videoGrid.classList.add('grid-3');
+    } else {
+      videoGrid.classList.add('grid-4');
+    }
+
+    if (watermarkCountText) {
+      watermarkCountText.textContent = `(${count}/4)`;
+      watermarkCountText.style.display = count > 1 ? 'inline' : 'none';
+    }
+
+    if (activeSenderName) {
+      if (count === 1) {
+        const p = Array.from(activePeers.values())[0];
+        activeSenderName.textContent = p.senderInfo.model || p.senderInfo.deviceName || 'Cihaz';
+      } else if (count > 1) {
+        activeSenderName.textContent = `Çoklu Ekran (${count} Cihaz)`;
+      }
+    }
+  }
+
+  function updateHeaderVisibility() {
+    const showHeader = currentSettings.showHeaderInFullscreen === true;
+    if ((isFullscreenState || isStreamingState) && !showHeader) {
+      if (topNav) topNav.style.display = 'none';
+    } else {
+      if (topNav) topNav.style.display = 'flex';
+    }
+  }
+
+  async function switchToStreamingView() {
+    isStreamingState = true;
     standbyView.style.display = 'none';
     desktopSenderView.style.display = 'none';
     streamingView.style.display = 'flex';
+
+    try {
+      const isFull = await window.electronAPI.isFullscreen();
+      isFullscreenState = isFull;
+      if (!isFull) {
+        await window.electronAPI.toggleFullscreen();
+        isFullscreenState = true;
+      }
+    } catch (err) {
+      console.warn('Auto fullscreen error:', err);
+    }
+
+    updateHeaderVisibility();
   }
 
-  function returnToStandbyView() {
-    if (receiverPeerConnection) {
-      receiverPeerConnection.close();
-      receiverPeerConnection = null;
+  async function returnToStandbyView() {
+    isStreamingState = false;
+
+    // Stop recording if active
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      stopRecording();
     }
-    remoteStream = null;
-    remoteVideo.srcObject = null;
+
+    // Close all peers
+    for (const [id, peer] of activePeers.entries()) {
+      if (peer.pc) peer.pc.close();
+      if (peer.tile && peer.tile.parentNode) peer.tile.parentNode.removeChild(peer.tile);
+    }
+    activePeers.clear();
+    clearCanvas();
+
+    // Reset video grid with empty primary tile
+    videoGrid.innerHTML = `
+      <div class="video-tile" id="tile-primary">
+        <video id="remoteVideo" autoplay playsinline></video>
+      </div>
+    `;
+    videoGrid.className = 'video-grid grid-1';
 
     streamingView.style.display = 'none';
     if (appMode === 'receiver') {
       standbyView.style.display = 'flex';
+    }
+
+    updateHeaderVisibility();
+  }
+
+  // --- ONE-CLICK SESSION RECORDING ---
+  function startRecording() {
+    const firstPeer = Array.from(activePeers.values())[0];
+    if (!firstPeer || !firstPeer.stream) {
+      alert('Kayıt başlatılacak aktif yayın akışı bulunamadı.');
+      return;
+    }
+
+    recordedChunks = [];
+    let options = { mimeType: 'video/webm;codecs=vp9,opus' };
+    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+      options = { mimeType: 'video/webm' };
+    }
+
+    try {
+      mediaRecorder = new MediaRecorder(firstPeer.stream, options);
+    } catch (e) {
+      mediaRecorder = new MediaRecorder(firstPeer.stream);
+    }
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) {
+        recordedChunks.push(e.data);
+      }
+    };
+
+    mediaRecorder.onstop = async () => {
+      clearInterval(recordingTimerInterval);
+      if (recordingIndicatorBadge) recordingIndicatorBadge.style.display = 'none';
+      if (recordBtnIcon) recordBtnIcon.textContent = '⏺';
+      if (recordBtnText) recordBtnText.textContent = 'Kaydet';
+      if (floatingRecordBtn) floatingRecordBtn.classList.remove('btn-recording');
+
+      const blob = new Blob(recordedChunks, { type: 'video/webm' });
+      const arrayBuffer = await blob.arrayBuffer();
+      const now = new Date();
+      const timestamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}-${String(now.getMinutes()).padStart(2,'0')}-${String(now.getSeconds()).padStart(2,'0')}`;
+      const filename = `HomakCast_${timestamp}.webm`;
+
+      const res = await window.electronAPI.saveRecording({ buffer: arrayBuffer, filename });
+      if (res && res.ok) {
+        alert(`Yayın kaydı başarıyla kaydedildi:\n${res.filePath}`);
+      } else {
+        alert(`Kayıt kaydedilirken bir hata oluştu: ${res ? res.error : 'Bilinmeyen hata'}`);
+      }
+    };
+
+    mediaRecorder.start(1000);
+    recordingStartTime = Date.now();
+    if (recordingIndicatorBadge) recordingIndicatorBadge.style.display = 'flex';
+    if (recordBtnIcon) recordBtnIcon.textContent = '⏹';
+    if (recordBtnText) recordBtnText.textContent = 'Durdur';
+    if (floatingRecordBtn) floatingRecordBtn.classList.add('btn-recording');
+
+    recordingTimerInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+      const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+      const s = String(elapsed % 60).padStart(2, '0');
+      if (recordingTimer) recordingTimer.textContent = `${m}:${s}`;
+    }, 1000);
+  }
+
+  function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
     }
   }
 
@@ -300,14 +732,10 @@
     desktopCastInfo.textContent = 'Hedef ekrana bağlanılıyor...';
     desktopCastInfo.style.display = 'block';
 
-    const sourceId = desktopSourceSelect.value;
-    const targetFps = parseInt(desktopFpsSelect.value, 10) || 60;
-    const includeAudio = desktopAudioToggle.checked;
-
     socket.emit('request-pairing', {
       pin,
       deviceName: 'Windows Masaüstü Uygulaması',
-      model: 'Windows 10/11 PC',
+      model: 'Windows PC',
       os: 'Windows',
       browser: 'Homak Cast App'
     }, async (res) => {
@@ -323,25 +751,12 @@
     });
   });
 
-  socket.on('pairing-approved', async (config) => {
-    if (appMode !== 'sender') return;
-    desktopCastInfo.style.display = 'none';
-    await startOutgoingStream(config);
-  });
-
-  socket.on('pairing-rejected', ({ reason }) => {
-    if (appMode !== 'sender') return;
-    showDesktopError(reason || 'Karşı cihaz yayını kabul etmedi.');
-    stopDesktopOutgoingCast();
-  });
-
   async function startOutgoingStream(config = {}) {
     try {
       const sourceId = desktopSourceSelect.value;
       const targetFps = parseInt(desktopFpsSelect.value, 10) || 60;
       const includeAudio = desktopAudioToggle.checked;
 
-      // Capture desktop screen via Electron mediaConstraints
       const constraints = {
         audio: includeAudio ? {
           mandatory: {
@@ -483,7 +898,9 @@
 
       audioOutputSelect.addEventListener('change', (e) => {
         selectedAudioDeviceId = e.target.value;
-        applyAudioOutput(selectedAudioDeviceId);
+        for (const peer of activePeers.values()) {
+          applyAudioOutputToVideo(peer.videoEl, selectedAudioDeviceId);
+        }
         window.electronAPI.saveSettings({ audioOutputId: selectedAudioDeviceId });
       });
     } catch (err) {
@@ -491,11 +908,9 @@
     }
   }
 
-  function applyAudioOutput(deviceId) {
-    if (typeof remoteVideo.setSinkId === 'function') {
-      remoteVideo.setSinkId(deviceId)
-        .then(() => console.log(`[Audio] Audio output routed to device: ${deviceId}`))
-        .catch(err => console.error('Failed to setSinkId:', err));
+  function applyAudioOutputToVideo(vEl, deviceId) {
+    if (vEl && typeof vEl.setSinkId === 'function') {
+      vEl.setSinkId(deviceId).catch(err => console.error('Failed to setSinkId:', err));
     }
   }
 
@@ -528,19 +943,20 @@
 
   function handleApprovalDecision(approved) {
     hideApprovalModal();
-    if (activeSenderId && socket) {
-      socket.emit('approval-decision', { senderId: activeSenderId, approved });
+    if (activePendingApprovalSenderId && socket) {
+      socket.emit('approval-decision', { senderId: activePendingApprovalSenderId, approved });
     }
-    activeSenderId = null;
+    activePendingApprovalSenderId = null;
   }
 
   // --- Settings Modal Logic ---
   function openSettings() {
-    settingSignalingUrl.value = currentSettings.signalingServerUrl || 'https://cast.homaklab.com';
-    settingDeviceName.value = currentSettings.deviceName || 'Homak Cast Receiver';
+    settingSignalingUrl.value = currentSettings.signalingServerUrl || '';
+    settingDeviceName.value = currentSettings.deviceName || 'The Land of Legends Receiver';
     settingPort.value = currentSettings.port || 5240;
     settingRequireApproval.checked = !!currentSettings.requireApproval;
     settingAutoStart.checked = !!currentSettings.autoStartOnBoot;
+    settingShowHeaderInFullscreen.checked = !!currentSettings.showHeaderInFullscreen;
     settingFps.value = currentSettings.defaultFps || 60;
 
     const stuns = (currentSettings.stunServers || []).map(s => s.urls).join('\n');
@@ -561,31 +977,51 @@
       .map(url => ({ urls: url }));
 
     const updated = {
-      signalingServerUrl: settingSignalingUrl.value.trim() || 'https://cast.homaklab.com',
-      deviceName: settingDeviceName.value.trim() || 'Homak Cast Receiver',
+      signalingServerUrl: settingSignalingUrl.value.trim(),
+      deviceName: settingDeviceName.value.trim() || 'The Land of Legends Receiver',
       port: parseInt(settingPort.value, 10) || 5240,
       requireApproval: settingRequireApproval.checked,
       autoStartOnBoot: settingAutoStart.checked,
+      showHeaderInFullscreen: settingShowHeaderInFullscreen.checked,
       defaultFps: parseInt(settingFps.value, 10) || 60,
       stunServers: stunLines
     };
 
     currentSettings = await window.electronAPI.saveSettings(updated);
+    if (currentSettings.signalingServerUrl) {
+      cloudBaseUrl = currentSettings.signalingServerUrl;
+      refreshActiveAddressUI();
+    }
     if (socket) {
       socket.emit('update-settings', currentSettings);
     }
+    updateHeaderVisibility();
     closeSettings();
   }
 
   // --- UI Events & Mode Switcher ---
   function setupUIEvents() {
+    // Mode toggle between Cloud and LAN
+    if (btnModeCloud) {
+      btnModeCloud.addEventListener('click', () => {
+        activeAddressMode = 'cloud';
+        refreshActiveAddressUI();
+      });
+    }
+
+    if (btnModeLan) {
+      btnModeLan.addEventListener('click', () => {
+        activeAddressMode = 'lan';
+        refreshActiveAddressUI();
+      });
+    }
     // Mode tabs
     tabReceiverMode.addEventListener('click', () => {
       appMode = 'receiver';
       tabReceiverMode.classList.add('active');
       tabSenderMode.classList.remove('active');
       desktopSenderView.style.display = 'none';
-      if (!remoteStream) {
+      if (activePeers.size === 0) {
         standbyView.style.display = 'flex';
       } else {
         streamingView.style.display = 'flex';
@@ -632,9 +1068,40 @@
 
     // Floating audio mute
     floatingMuteBtn.addEventListener('click', () => {
-      remoteVideo.muted = !remoteVideo.muted;
-      floatingMuteBtn.textContent = remoteVideo.muted ? '🔇' : '🔊';
+      let anyMuted = false;
+      for (const peer of activePeers.values()) {
+        if (peer.videoEl) {
+          peer.videoEl.muted = !peer.videoEl.muted;
+          anyMuted = peer.videoEl.muted;
+        }
+      }
+      floatingMuteBtn.textContent = anyMuted ? '🔇' : '🔊';
     });
+
+    // One-Click Session Recording
+    if (floatingRecordBtn) {
+      floatingRecordBtn.addEventListener('click', () => {
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+          stopRecording();
+        } else {
+          startRecording();
+        }
+      });
+    }
+
+    // Clear Annotations
+    if (floatingClearDrawBtn) {
+      floatingClearDrawBtn.addEventListener('click', () => {
+        clearCanvas();
+      });
+    }
+
+    // Open recordings folder button in settings
+    if (openRecordingsBtn) {
+      openRecordingsBtn.addEventListener('click', async () => {
+        await window.electronAPI.openRecordingsFolder();
+      });
+    }
 
     // Approval buttons
     acceptPairingBtn.addEventListener('click', () => handleApprovalDecision(true));
@@ -652,7 +1119,14 @@
       returnToStandbyView();
     });
 
-    window.addEventListener('keydown', (e) => {
+    if (window.electronAPI.onFullscreenChanged) {
+      window.electronAPI.onFullscreenChanged((isFull) => {
+        isFullscreenState = isFull;
+        updateHeaderVisibility();
+      });
+    }
+
+    window.addEventListener('keydown', async (e) => {
       if (e.key === 'F11') {
         window.electronAPI.toggleFullscreen();
       } else if (e.key === 'Escape') {
@@ -660,6 +1134,14 @@
           closeSettings();
         } else if (approvalModal.style.display !== 'none') {
           handleApprovalDecision(false);
+        } else {
+          // ESC exits fullscreen
+          const isFull = await window.electronAPI.isFullscreen();
+          if (isFull) {
+            await window.electronAPI.toggleFullscreen();
+            isFullscreenState = false;
+            updateHeaderVisibility();
+          }
         }
       }
     });

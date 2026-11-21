@@ -4,6 +4,7 @@ const { Server } = require('socket.io');
 const path = require('path');
 const QRCode = require('qrcode');
 const { loadSettings, saveSettings, getNetworkAddresses } = require('./config');
+const { buildTurnServers } = require('./turn');
 
 class SignalingServer {
   constructor(options = {}) {
@@ -21,7 +22,7 @@ class SignalingServer {
     this.settings = loadSettings();
 
     // Multi-receiver state
-    // pin -> { socketId, deviceName, createdAt, inUse: boolean, activeSenderId: string|null }
+    // pin -> { socketId, deviceName, createdAt, inUse: boolean, activeSenders: Map<senderSocketId, senderInfo>, maxSenders: number }
     this.receiversByPin = new Map();
     // socketId -> pin
     this.pinsByReceiverSocket = new Map();
@@ -29,7 +30,7 @@ class SignalingServer {
     this.activePairs = new Map();
 
     this.rateLimits = new Map(); // ip -> { attempts, lastAttempt, blockedUntil }
-    this.pendingApprovals = new Map(); // senderSocketId -> { timeoutId, senderInfo, receiverSocketId }
+    this.pendingApprovals = new Map(); // senderSocketId -> { timeoutId, senderInfo, receiverSocketId, pin }
 
     this.initExpress();
     this.initSocket();
@@ -45,48 +46,64 @@ class SignalingServer {
     return pin;
   }
 
-  getConnectUrl(req, pin) {
-    let host = this.publicHost;
-    let protocol = 'https';
+  getPrimaryLanAddress() {
+    const addresses = getNetworkAddresses();
+    const lan = addresses.find(a => a.isLocal && a.address.startsWith('192.168.')) ||
+                addresses.find(a => a.isLocal && !a.address.startsWith('172.') && !a.address.startsWith('10.77.')) ||
+                addresses.find(a => a.isLocal) || addresses[0];
+    return lan ? lan.address : '127.0.0.1';
+  }
 
-    if (req && req.headers && req.headers.host) {
-      host = req.headers.host;
-      if (host.includes('localhost') || host.includes('127.0.0.1') || host.includes('192.168.')) {
-        protocol = req.protocol || 'http';
-      }
+  getConnectUrl(req, pin) {
+    let host = req && req.headers ? (req.headers['x-forwarded-host'] || req.headers.host) : '';
+    if (!host || host.startsWith('127.0.0.1') || host.startsWith('localhost')) {
+      host = this.publicHost || 'cast.homaklab.com';
+    }
+
+    let protocol = 'https';
+    if (req && req.headers && req.headers['x-forwarded-proto']) {
+      protocol = req.headers['x-forwarded-proto'];
+    } else if (host.includes('192.168.') || host.includes('10.') || host.includes('172.') || host.includes(':5240')) {
+      protocol = 'http';
     }
 
     const pinParam = pin ? `?code=${pin}` : '';
     return `${protocol}://${host}/${pinParam}`;
   }
 
+  getConnectUrlForSocket(socket, pin, customBaseUrl) {
+    if (customBaseUrl) {
+      const clean = customBaseUrl.replace(/\/+$/, '');
+      return `${clean}/?code=${pin}`;
+    }
+
+    let host = socket.handshake.headers['x-forwarded-host'] || socket.handshake.headers.host || '';
+    if (!host || host.startsWith('127.0.0.1') || host.startsWith('localhost')) {
+      host = this.publicHost || 'cast.homaklab.com';
+    }
+
+    let proto = 'https';
+    if (socket.handshake.headers['x-forwarded-proto']) {
+      proto = socket.handshake.headers['x-forwarded-proto'];
+    } else if (host.includes('192.168.') || host.includes('10.') || host.includes('172.') || host.includes(':5240')) {
+      proto = 'http';
+    }
+
+    const pinParam = pin ? `?code=${pin}` : '';
+    return `${proto}://${host}/${pinParam}`;
+  }
+
   checkRateLimit(ip) {
-    const now = Date.now();
-    const limitData = this.rateLimits.get(ip) || { attempts: 0, lastAttempt: now, blockedUntil: 0 };
-
-    if (limitData.blockedUntil > now) {
-      const waitSeconds = Math.ceil((limitData.blockedUntil - now) / 1000);
-      return { allowed: false, error: `Çok fazla hatalı deneme yapıldı. Lütfen ${waitSeconds} saniye bekleyin.` };
-    }
-
-    if (now - limitData.lastAttempt > 60000) {
-      limitData.attempts = 0;
-    }
-
-    return { allowed: true, limitData };
+    // Disabled aggressive lockout so presenters/attendees are never blocked
+    return { allowed: true };
   }
 
   recordFailedAttempt(ip, limitData) {
-    const now = Date.now();
-    limitData.attempts += 1;
-    limitData.lastAttempt = now;
+    // No-op
+  }
 
-    if (limitData.attempts >= 5) {
-      limitData.blockedUntil = now + 60000;
-      console.warn(`[HomakCast] Rate limit triggered for IP ${ip}`);
-    }
-
-    this.rateLimits.set(ip, limitData);
+  resetRateLimit(ip) {
+    this.rateLimits.delete(ip);
   }
 
   resetRateLimit(ip) {
@@ -95,7 +112,14 @@ class SignalingServer {
 
   initExpress() {
     this.app.use(express.json());
-    this.app.use(express.static(path.join(__dirname, 'public')));
+    this.app.use((req, res, next) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      next();
+    });
+    this.app.use(express.static(path.join(__dirname, 'public'), {
+      etag: false,
+      maxAge: 0
+    }));
 
     // Status endpoint
     this.app.get('/api/status', (req, res) => {
@@ -103,7 +127,7 @@ class SignalingServer {
       res.json({
         ok: true,
         service: 'Homak Cast Signaling & Web Sender',
-        domain: 'cast.homaklab.com',
+        domain: this.publicHost,
         port: this.port,
         addresses,
         receiverOnline: this.receiversByPin.size > 0,
@@ -113,20 +137,20 @@ class SignalingServer {
       });
     });
 
-    // QR Code data URL generator
+    // QR Code data URL generator (Land of Legends High-Contrast Crisp Black on White)
     this.app.get('/api/qr', async (req, res) => {
       try {
         const pin = req.query.code;
-        const url = this.getConnectUrl(req, pin);
-        const qrImage = await QRCode.toDataURL(url, {
-          width: 320,
+        const targetUrl = req.query.url || this.getConnectUrl(req, pin);
+        const qrImage = await QRCode.toDataURL(targetUrl, {
+          width: 360,
           margin: 1,
           color: {
-            dark: '#00f0ff',
-            light: '#0a0e17'
+            dark: '#0a0e17',
+            light: '#ffffff'
           }
         });
-        res.json({ ok: true, qr: qrImage, url, pin });
+        res.json({ ok: true, qr: qrImage, url: targetUrl, pin });
       } catch (err) {
         res.status(500).json({ ok: false, error: err.message });
       }
@@ -148,21 +172,31 @@ class SignalingServer {
       const normalizedInput = code.replace(/\s+/g, '');
       const receiver = this.receiversByPin.get(normalizedInput);
 
-      if (!receiver || receiver.inUse) {
+      if (!receiver || (receiver.activeSenders && receiver.activeSenders.size >= (receiver.maxSenders || 4))) {
         this.recordFailedAttempt(clientIp, check.limitData);
-        return res.status(400).json({ ok: false, error: 'Eşleştirme kodu hatalı veya kullanımda.' });
+        return res.status(400).json({ ok: false, error: 'Eşleştirme kodu hatalı veya alıcı maksimum yayına (4/4) ulaştı.' });
       }
 
       this.resetRateLimit(clientIp);
       return res.json({ ok: true, message: 'Kod doğrulandı.', deviceName: receiver.deviceName });
     });
 
-    // Direct download endpoint for Windows Receiver EXE
-    this.app.get('/download', (req, res) => {
+    // Direct download endpoint for Windows Receiver Portable EXE
+    this.app.get(['/download', '/download/portable', '/Homak-Cast-Receiver.exe'], (req, res) => {
       const exePath = path.join(__dirname, 'public', 'downloads', 'Homak-Cast-Receiver.exe');
       res.download(exePath, 'Homak-Cast-Receiver.exe', (err) => {
         if (err && !res.headersSent) {
           res.status(404).send('İndirme dosyası hazırlanıyor veya bulunamadı.');
+        }
+      });
+    });
+
+    // Windows Receiver Setup / Installer EXE
+    this.app.get(['/download/setup', '/download/installer', '/Homak-Cast-Setup.exe'], (req, res) => {
+      const exePath = path.join(__dirname, 'public', 'downloads', 'Homak-Cast-Setup.exe');
+      res.download(exePath, 'Homak-Cast-Setup.exe', (err) => {
+        if (err && !res.headersSent) {
+          res.status(404).send('Kurulum paketi hazırlanıyor veya bulunamadı.');
         }
       });
     });
@@ -201,7 +235,8 @@ class SignalingServer {
           deviceName: data.deviceName || this.settings.deviceName || 'Homak Cast Receiver',
           createdAt: Date.now(),
           inUse: false,
-          activeSenderId: null
+          activeSenders: new Map(), // senderSocketId -> senderInfo (supports up to 4 concurrent senders!)
+          maxSenders: 4
         };
 
         this.receiversByPin.set(pin, receiverData);
@@ -209,7 +244,7 @@ class SignalingServer {
 
         console.log(`[HomakCast] Receiver registered: ${socket.id} with PIN: ${pin} (${receiverData.deviceName})`);
 
-        const connectUrl = `https://${this.publicHost}/?code=${pin}`;
+        const connectUrl = this.getConnectUrlForSocket(socket, pin, data.customBaseUrl);
 
         if (typeof callback === 'function') {
           callback({
@@ -247,14 +282,18 @@ class SignalingServer {
           return;
         }
 
-        if (receiver.inUse && receiver.activeSenderId !== socket.id) {
+        // Multi-Stream check (up to 4 streams simultaneously)
+        if (receiver.activeSenders && receiver.activeSenders.size >= (receiver.maxSenders || 4) && !receiver.activeSenders.has(socket.id)) {
           if (typeof callback === 'function') {
-            callback({ ok: false, error: 'Bu alıcı ekranı şu anda başka bir yayında.' });
+            callback({ ok: false, error: 'Bu alıcı ekranı maksimum yayın kapasitesine ulaştı (4/4 cihaz aktif).' });
           }
           return;
         }
 
         this.resetRateLimit(clientIp);
+
+        const ua = socket.handshake.headers['user-agent'] || 'unknown';
+        console.log(`[HomakCast] Pairing request from IP: ${clientIp}, UA: ${ua}, Data:`, data);
 
         const senderInfo = {
           socketId: socket.id,
@@ -316,7 +355,7 @@ class SignalingServer {
         }
       });
 
-      // 4. WebRTC Signaling forwarding
+      // 4. WebRTC Signaling forwarding (with senderId for multi-screen)
       socket.on('webrtc-offer', (data) => {
         const receiverId = this.activePairs.get(socket.id);
         if (receiverId) {
@@ -328,10 +367,9 @@ class SignalingServer {
       });
 
       socket.on('webrtc-answer', (data) => {
-        const pin = this.pinsByReceiverSocket.get(socket.id);
-        const receiver = pin ? this.receiversByPin.get(pin) : null;
-        if (receiver && receiver.activeSenderId) {
-          this.io.to(receiver.activeSenderId).emit('webrtc-answer', {
+        const targetSenderId = data.senderId;
+        if (targetSenderId) {
+          this.io.to(targetSenderId).emit('webrtc-answer', {
             sdp: data.sdp
           });
         }
@@ -341,26 +379,39 @@ class SignalingServer {
         // Forward from sender to receiver
         if (this.activePairs.has(socket.id)) {
           const receiverId = this.activePairs.get(socket.id);
-          this.io.to(receiverId).emit('webrtc-candidate', data.candidate);
-        } else {
-          // Forward from receiver to active sender
-          const pin = this.pinsByReceiverSocket.get(socket.id);
-          const receiver = pin ? this.receiversByPin.get(pin) : null;
-          if (receiver && receiver.activeSenderId) {
-            this.io.to(receiver.activeSenderId).emit('webrtc-candidate', data.candidate);
-          }
+          this.io.to(receiverId).emit('webrtc-candidate', {
+            candidate: data.candidate,
+            senderId: socket.id
+          });
+        } else if (data.senderId) {
+          // Forward from receiver to specific sender
+          this.io.to(data.senderId).emit('webrtc-candidate', {
+            candidate: data.candidate
+          });
         }
       });
 
-      // 5. Stream Termination
+      // 5. Annotation & Laser Pointer forwarding
+      socket.on('stream-annotation', (data) => {
+        const receiverId = this.activePairs.get(socket.id);
+        if (receiverId) {
+          this.io.to(receiverId).emit('stream-annotation', {
+            ...data,
+            senderId: socket.id
+          });
+        }
+      });
+
+      // 6. Stream Termination
       socket.on('stop-stream', () => {
         this.terminateStreamForSocket(socket.id, 'Kullanıcı yayını durdurdu.');
       });
 
-      // 6. Manual PIN Refresh
+      // 7. Manual PIN Refresh
       socket.on('refresh-pin', () => {
         const currentPin = this.pinsByReceiverSocket.get(socket.id);
         if (currentPin) {
+          const oldReceiver = this.receiversByPin.get(currentPin);
           this.receiversByPin.delete(currentPin);
           const newPin = this.generateUniquePin();
           const receiverData = {
@@ -368,17 +419,18 @@ class SignalingServer {
             deviceName: this.settings.deviceName || 'Homak Cast Receiver',
             createdAt: Date.now(),
             inUse: false,
-            activeSenderId: null
+            activeSenders: oldReceiver ? oldReceiver.activeSenders : new Map(),
+            maxSenders: 4
           };
           this.receiversByPin.set(newPin, receiverData);
           this.pinsByReceiverSocket.set(socket.id, newPin);
 
-          const connectUrl = `https://${this.publicHost}/?code=${newPin}`;
+          const connectUrl = this.getConnectUrlForSocket(socket, newPin);
           socket.emit('pin-update', { pin: newPin, qrUrl: connectUrl });
         }
       });
 
-      // 7. Settings Update from Receiver
+      // 8. Settings Update from Receiver
       socket.on('update-settings', (newSettings, callback) => {
         this.settings = saveSettings(newSettings) || this.settings;
         if (typeof callback === 'function') callback({ ok: true, settings: this.settings });
@@ -390,9 +442,11 @@ class SignalingServer {
         const pin = this.pinsByReceiverSocket.get(socket.id);
         if (pin) {
           const receiver = this.receiversByPin.get(pin);
-          if (receiver && receiver.activeSenderId) {
-            this.io.to(receiver.activeSenderId).emit('stream-terminated', { reason: 'Alıcı cihazın bağlantısı koptu.' });
-            this.activePairs.delete(receiver.activeSenderId);
+          if (receiver && receiver.activeSenders) {
+            for (const senderId of receiver.activeSenders.keys()) {
+              this.io.to(senderId).emit('stream-terminated', { reason: 'Alıcı cihazın bağlantısı koptu.' });
+              this.activePairs.delete(senderId);
+            }
           }
           this.receiversByPin.delete(pin);
           this.pinsByReceiverSocket.delete(socket.id);
@@ -413,81 +467,100 @@ class SignalingServer {
   }
 
   completePairing(senderSocket, receiver, senderInfo, pin, callback) {
-    receiver.inUse = true;
-    receiver.activeSenderId = senderSocket.id;
+    if (!receiver.activeSenders) {
+      receiver.activeSenders = new Map();
+    }
+
+    receiver.activeSenders.set(senderSocket.id, senderInfo);
+    receiver.inUse = (receiver.activeSenders.size >= (receiver.maxSenders || 4));
     this.activePairs.set(senderSocket.id, receiver.socketId);
 
-    console.log(`[HomakCast] Pairing successful! Sender ${senderSocket.id} paired with Receiver ${receiver.socketId} (PIN ${pin})`);
+    console.log(`[HomakCast] Pairing successful! Sender ${senderSocket.id} (${senderInfo.deviceName}) paired with Receiver ${receiver.socketId} (Active: ${receiver.activeSenders.size}/4)`);
 
     const iceServers = [
       ...this.settings.stunServers,
-      ...this.settings.turnServers
+      ...this.settings.turnServers,
+      ...buildTurnServers()
     ];
 
     senderSocket.emit('pairing-approved', {
       iceServers,
       defaultFps: this.settings.defaultFps,
       adaptiveBitrate: this.settings.adaptiveBitrate,
-      maxBitrateKbps: this.settings.maxBitrateKbps
+      maxBitrateKbps: this.settings.maxBitrateKbps,
+      activeStreamCount: receiver.activeSenders.size
     });
 
     this.io.to(receiver.socketId).emit('sender-connected', {
+      senderId: senderSocket.id,
       senderInfo,
-      iceServers
+      iceServers,
+      activeStreamCount: receiver.activeSenders.size
     });
 
     if (typeof callback === 'function') {
-      callback({ ok: true, status: 'CONNECTED' });
+      callback({ ok: true, status: 'CONNECTED', activeStreamCount: receiver.activeSenders.size });
     }
   }
 
   terminateStreamForSocket(socketId, reason = 'Yayın sona erdi.') {
-    let senderId = null;
-    let receiverId = null;
-    let pin = null;
-
+    // If it is a sender disconnecting:
     if (this.activePairs.has(socketId)) {
-      senderId = socketId;
-      receiverId = this.activePairs.get(socketId);
+      const senderId = socketId;
+      const receiverId = this.activePairs.get(socketId);
       this.activePairs.delete(senderId);
-      pin = this.pinsByReceiverSocket.get(receiverId);
-    } else {
-      pin = this.pinsByReceiverSocket.get(socketId);
-      if (pin) {
-        receiverId = socketId;
-        const receiver = this.receiversByPin.get(pin);
-        if (receiver && receiver.activeSenderId) {
-          senderId = receiver.activeSenderId;
-          this.activePairs.delete(senderId);
+
+      const pin = this.pinsByReceiverSocket.get(receiverId);
+      const receiver = pin ? this.receiversByPin.get(pin) : null;
+      if (receiver && receiver.activeSenders) {
+        receiver.activeSenders.delete(senderId);
+        receiver.inUse = false;
+      }
+
+      this.io.to(senderId).emit('stream-terminated', { reason });
+      if (receiverId) {
+        const remaining = receiver ? receiver.activeSenders.size : 0;
+        this.io.to(receiverId).emit('sender-disconnected', { senderId, reason, remainingStreams: remaining });
+        if (remaining === 0) {
+          this.io.to(receiverId).emit('all-streams-ended', { reason });
         }
       }
+      return;
     }
 
-    if (senderId) {
-      this.io.to(senderId).emit('stream-terminated', { reason });
-    }
-
-    if (receiverId) {
-      this.io.to(receiverId).emit('stream-terminated', { reason });
-
-      // Generate a fresh PIN for the receiver
-      if (pin) {
-        this.receiversByPin.delete(pin);
-        const newPin = this.generateUniquePin();
-        const receiverData = {
-          socketId: receiverId,
-          deviceName: this.settings.deviceName || 'Homak Cast Receiver',
-          createdAt: Date.now(),
-          inUse: false,
-          activeSenderId: null
-        };
-        this.receiversByPin.set(newPin, receiverData);
-        this.pinsByReceiverSocket.set(receiverId, newPin);
-
-        const connectUrl = `https://${this.publicHost}/?code=${newPin}`;
-        this.io.to(receiverId).emit('pin-update', { pin: newPin, qrUrl: connectUrl });
-        console.log(`[HomakCast] New PIN generated after stream end for receiver ${receiverId}: ${newPin}`);
+    // If it is a receiver stopping all streams:
+    const pin = this.pinsByReceiverSocket.get(socketId);
+    if (pin) {
+      const receiverId = socketId;
+      const receiver = this.receiversByPin.get(pin);
+      if (receiver && receiver.activeSenders) {
+        for (const senderId of receiver.activeSenders.keys()) {
+          this.io.to(senderId).emit('stream-terminated', { reason });
+          this.activePairs.delete(senderId);
+        }
+        receiver.activeSenders.clear();
+        receiver.inUse = false;
       }
+
+      this.io.to(receiverId).emit('all-streams-ended', { reason });
+
+      // Generate a fresh PIN
+      this.receiversByPin.delete(pin);
+      const newPin = this.generateUniquePin();
+      const receiverData = {
+        socketId: receiverId,
+        deviceName: this.settings.deviceName || 'Homak Cast Receiver',
+        createdAt: Date.now(),
+        inUse: false,
+        activeSenders: new Map(),
+        maxSenders: 4
+      };
+      this.receiversByPin.set(newPin, receiverData);
+      this.pinsByReceiverSocket.set(receiverId, newPin);
+
+      const connectUrl = `https://${this.publicHost}/?code=${newPin}`;
+      this.io.to(receiverId).emit('pin-update', { pin: newPin, qrUrl: connectUrl });
+      console.log(`[HomakCast] New PIN generated after stream end for receiver ${receiverId}: ${newPin}`);
     }
   }
 

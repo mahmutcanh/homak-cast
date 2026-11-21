@@ -3,20 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Homak Cast Receiver</title>
+  <title>The Land of Legends — Cast Receiver</title>
   <link rel="stylesheet" href="styles.css">
   <script src="assets/socket.io.js"></script>
 </head>
-<body class="theme-dark">
-  <div class="ambient-glow"></div>
+<body class="theme-lol">
 
   <!-- Main View Container -->
   <div id="appContainer" class="app-container">
     
     <!-- Top Action Bar -->
-    <header class="top-nav">
+    <header class="top-nav" id="topNav">
       <div class="nav-brand">
-        <div class="brand-badge">HOMAK</div>
+        <div class="brand-badge-lol">THE LAND OF LEGENDS</div>
         <div class="brand-title">CAST</div>
 
         <!-- Mode Switcher Tabs -->
@@ -59,47 +58,85 @@
       </div>
     </header>
 
-    <!-- 1. STANDBY / PAIRING VIEW -->
+    <!-- 1. STANDBY / PAIRING VIEW (THE LAND OF LEGENDS THEME: WHITE BG, LOGO TOP, CODE LEFT, QR RIGHT) -->
     <main id="standbyView" class="view-standby">
-      <div class="standby-content">
-        <div class="hero-header">
-          <div class="pulse-ring">
-            <div class="broadcast-icon">📡</div>
-          </div>
-          <h1>Yayın Almaya Hazır</h1>
-          <p class="subtitle">Telefonunuzdan, tabletinizden veya bilgisayarınızdan bağlanarak ekranınızı bu ekrana yansıtın.</p>
+      <div class="standby-wrapper">
+        
+        <!-- Top: Official The Land of Legends Logo -->
+        <div class="lol-brand-header">
+          <img src="assets/lol-logo.png" alt="The Land of Legends" class="lol-main-logo">
+          <h2 class="lol-hero-title">KABLOSUZ EKRAN VE SUNUM MERKEZİ</h2>
+          <p class="lol-hero-subtitle">Telefonunuzdan, tabletinizden veya bilgisayarınızdan anında bağlanarak ekranınızı yansıtın.</p>
         </div>
 
-        <div class="pairing-grid">
-          <!-- Left: 6-Digit PIN Card -->
-          <div class="card card-pin">
-            <span class="card-tag">EŞLEŞTİRME KODU</span>
-            <div class="pin-display">
-              <span id="pinCode" class="pin-digits">--- ---</span>
-              <button id="refreshPinBtn" class="btn-refresh" title="Yeni Kod Oluştur">🔄</button>
+        <!-- Side-by-Side Content: Left Code & Steps, Right High-Contrast QR -->
+        <div class="lol-split-grid">
+          
+          <!-- LEFT: 6-Digit PIN Code & Instructions -->
+          <div class="lol-panel lol-panel-left">
+            <div class="panel-tag">EŞLEŞTİRME KODU</div>
+            
+            <div class="lol-pin-box">
+              <span id="pinCode" class="lol-pin-digits">--- ---</span>
+              <button id="refreshPinBtn" class="lol-btn-refresh" title="Yeni Eşleştirme Kodu Oluştur">🔄</button>
             </div>
-            <p class="card-hint">Yayın başlatmak için bu 6 haneli kodu göndericiye girin.</p>
+
+            <div class="lol-steps-list">
+              <div class="lol-step-item">
+                <div class="step-badge">1</div>
+                <div class="step-desc">
+                  Telefon veya bilgisayarınızda <strong id="stepDomainText" class="highlight-url">cast.homaklab.com</strong> adresini açın.
+                </div>
+              </div>
+              <div class="lol-step-item">
+                <div class="step-badge">2</div>
+                <div class="step-desc">
+                  Yukarıda görünen <strong>6 haneli PIN kodunu</strong> girin.
+                </div>
+              </div>
+              <div class="lol-step-item">
+                <div class="step-badge">3</div>
+                <div class="step-desc">
+                  Ekranınız, slaytınız veya kameranız <strong>60 FPS ultra akıcı</strong> canlı yayınlansın.
+                </div>
+              </div>
+            </div>
+
+            <div class="lol-badges-pill-row">
+              <span class="lol-pill"><span class="dot-green"></span> Alıcı Çevrimiçi</span>
+              <span class="lol-pill">⚡ 60 FPS Düşük Gecikme</span>
+              <span class="lol-pill">🔀 Çoklu Ekran (1-4 Cihaz)</span>
+            </div>
           </div>
 
-          <!-- Right: QR Code Card -->
-          <div class="card card-qr">
-            <span class="card-tag">HIZLI BAĞLANTI QR</span>
-            <div class="qr-container">
-              <img id="qrImage" src="" alt="Yansıtma QR Kodu" class="qr-code-img">
+          <!-- RIGHT: High-Contrast QR Code Card -->
+          <div class="lol-panel lol-panel-right">
+            <div class="panel-tag">HIZLI BAĞLANTI (QR)</div>
+            
+            <div class="lol-qr-box">
+              <img id="qrImage" src="" alt="Bağlantı QR Kodu" class="lol-qr-image">
             </div>
-            <div class="qr-address-box">
-              <span class="qr-link-label">Veya tarayıcıda açın:</span>
-              <span id="connectUrlText" class="qr-url">http://127.0.0.1:5240</span>
+
+            <div class="lol-qr-footer">
+              <div class="qr-action-hint">📱 Telefon kamerasıyla okutun ve anında bağlanın</div>
+              <div class="qr-url-badge">
+                <span id="connectUrlText" class="qr-url-text">https://cast.homaklab.com</span>
+              </div>
             </div>
           </div>
+
         </div>
 
-        <div class="specs-bar">
-          <div class="spec-item"><span class="dot-live"></span> 60 FPS Ultra Akıcı</div>
-          <div class="spec-item"><span class="dot-live"></span> Düşük Gecikmeli WebRTC</div>
-          <div class="spec-item"><span class="dot-live"></span> HDMI & Çoklu Ekran Desteği</div>
-          <div class="spec-item"><span class="dot-live"></span> Çapraz Ağ & VLAN Geçişi</div>
-        </div>
+        <!-- Bottom Status Bar -->
+        <footer class="lol-bottom-bar">
+          <button id="btnModeCloud" class="lol-net-pill active" type="button" title="Bulut Sunucusu Adresini Kullan">
+            <span class="dot-green"></span> Bulut: <strong id="bottomCloudDomainText">cast.homaklab.com</strong>
+          </button>
+          <button id="btnModeLan" class="lol-net-pill" type="button" title="Yerel Ağ (Wi-Fi / LAN) Adresine Geç">
+            <span>💻</span> Yerel Ağ (LAN): <strong id="lanIpText">---</strong>
+          </button>
+        </footer>
+
       </div>
     </main>
 
@@ -161,11 +198,36 @@
       </div>
     </main>
 
-    <!-- 2. STREAMING VIEW (ACTIVE CAST) -->
+    <!-- 2. STREAMING VIEW (MULTI-SCREEN SPLIT SCREEN + LASER/ANNOTATION + WATERMARK + RECORDING) -->
     <section id="streamingView" class="view-streaming" style="display: none;">
-      <video id="remoteVideo" autoplay playsinline></video>
+      
+      <!-- Video Grid Container (Dynamic Split-Screen: 1, 2, 3 or 4 screens) -->
+      <div id="videoGrid" class="video-grid grid-1">
+        <div class="video-tile" id="tile-primary">
+          <video id="remoteVideo" autoplay playsinline></video>
+        </div>
+      </div>
 
-      <!-- Floating Controls Bar (Shows on hover) -->
+      <!-- Transparent Annotation Canvas Overlay (Laser Pointer & Pen Drawing) -->
+      <canvas id="annotationCanvas" class="annotation-canvas"></canvas>
+
+      <!-- Floating PIN Watermark Badge in Top Corner (Semi-transparent during active presentation) -->
+      <div id="floatingPinBadge" class="floating-pin-badge" title="Yeni sunumcu bu kod ile bağlanıp ekranı bölebilir">
+        <span class="watermark-icon">📺</span>
+        <span class="watermark-domain" id="watermarkDomainText"></span>
+        <span class="watermark-sep">|</span>
+        <span class="watermark-pin" id="watermarkPinText">PIN: --- ---</span>
+        <span class="watermark-count" id="watermarkCountText">(1/4)</span>
+      </div>
+
+      <!-- Recording Active Badge (Blinks when recording is running) -->
+      <div id="recordingIndicatorBadge" class="recording-badge" style="display: none;">
+        <span class="rec-dot"></span>
+        <span>KAYIT EDİLİYOR</span>
+        <span id="recordingTimer">00:00</span>
+      </div>
+
+      <!-- Floating Controls Bar (Shows on mouse hover) -->
       <div class="stream-floating-bar" id="floatingBar">
         <div class="stream-info">
           <span class="live-badge"><span class="pulse-dot"></span> CANLI</span>
@@ -178,9 +240,19 @@
         </div>
 
         <div class="stream-actions">
+          <!-- One-Click Session Recording Button -->
+          <button id="floatingRecordBtn" class="stream-btn btn-record" title="Yayını Kaydet (MP4/WebM)">
+            <span id="recordBtnIcon">⏺</span> <span id="recordBtnText">Kaydet</span>
+          </button>
+
+          <!-- Clear Annotations Button -->
+          <button id="floatingClearDrawBtn" class="stream-btn" title="Çizimleri ve Lazer İşaretlerini Temizle">
+            🧹 Temizle
+          </button>
+
           <button id="floatingMuteBtn" class="stream-btn" title="Sesi Aç / Kapat">🔊</button>
           <button id="floatingFullscreenBtn" class="stream-btn" title="Tam Ekran">⛶</button>
-          <button id="disconnectCastBtn" class="stream-btn btn-danger" title="Yayını Sonlandır">
+          <button id="disconnectCastBtn" class="stream-btn btn-danger" title="Tüm Yayınları Sonlandır">
             ⏹ Yayını Durdur
           </button>
         </div>
@@ -192,7 +264,7 @@
       <div class="modal-box modal-approval">
         <div class="modal-icon">🔒</div>
         <h2>Yayın Talebi Onayı</h2>
-        <p class="modal-subtitle">Aşağıdaki cihaz ekranını bu projeksiyona/ekrana yansıtmak istiyor:</p>
+        <p class="modal-subtitle">Aşağıdaki cihaz ekranını bu ekrana yansıtmak istiyor:</p>
         
         <div class="device-info-card">
           <div class="device-row"><strong>Cihaz:</strong> <span id="approvalDeviceName">-</span></div>
@@ -220,9 +292,9 @@
 
         <div class="settings-form">
           <div class="form-group">
-            <label for="settingSignalingUrl">Sinyal / Relay Sunucusu:</label>
-            <input type="text" id="settingSignalingUrl" class="form-input" placeholder="https://cast.homaklab.com">
-            <small class="form-hint">Bulut sunucusu (https://cast.homaklab.com) veya yerel sunucu (http://localhost:5240)</small>
+            <label for="settingSignalingUrl">Sinyal / Relay Sunucusu (İsteğe Bağlı):</label>
+            <input type="text" id="settingSignalingUrl" class="form-input" placeholder="Yerel Sunucu (http://localhost:5240)">
+            <small class="form-hint">Boş bırakıldığında bilgisayarın kendi yerel ağ sunucusu kullanılır.</small>
           </div>
 
           <div class="form-group">
@@ -245,6 +317,11 @@
             <label for="settingAutoStart">Windows oturumu açıldığında otomatik başlat</label>
           </div>
 
+          <div class="form-group checkbox-group">
+            <input type="checkbox" id="settingShowHeaderInFullscreen">
+            <label for="settingShowHeaderInFullscreen">Tam ekrandayken üst menü çubuğunu göster (İşaretsizse: Saf tam ekran video)</label>
+          </div>
+
           <div class="form-group">
             <label for="settingFps">Hedef Kare Hızı (FPS):</label>
             <select id="settingFps" class="form-input">
@@ -261,6 +338,7 @@
 
           <div class="modal-actions">
             <button id="saveSettingsBtn" class="btn btn-primary">Ayarları Kaydet</button>
+            <button id="openRecordingsBtn" class="btn btn-secondary">📁 Kayıt Klasörünü Aç</button>
           </div>
         </div>
       </div>

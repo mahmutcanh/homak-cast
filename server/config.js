@@ -19,9 +19,10 @@ const SETTINGS_FILE = path.join(APPDATA_DIR, 'settings.json');
 const defaultConfig = {
   port: 5240,
   signalingServerUrl: 'https://cast.homaklab.com',
-  deviceName: 'Homak Cast Receiver',
+  deviceName: 'The Land of Legends Receiver',
   requireApproval: false, // Default: no approval needed (connects immediately), can be enabled in settings
-  autoStartOnBoot: false,
+  showHeaderInFullscreen: false, // Default: clean immersive fullscreen video without header
+  autoStartOnBoot: true, // Auto-start with Windows on boot
   targetDisplayId: null, // null = primary display
   audioOutputId: 'default',
   defaultFps: 60,
