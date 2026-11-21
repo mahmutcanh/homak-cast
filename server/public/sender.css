@@ -157,6 +157,20 @@ body {
   margin: 0 auto;
 }
 
+.card-logo-hero {
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-hero-lol-logo {
+  height: 52px;
+  max-width: 220px;
+  width: auto;
+  object-fit: contain;
+}
+
 .card-icon-hero {
   font-size: 46px;
   margin-bottom: 12px;

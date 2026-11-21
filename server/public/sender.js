@@ -94,7 +94,7 @@
     guideHostSpan.textContent = window.location.host;
   }
 
-  // Automatic input formatting & Auto-connect on 6 digits
+  // Automatic input formatting & Ready status on 6 digits (No auto-trigger, user clicks button explicitly)
   if (pinInput) {
     pinInput.addEventListener('input', () => {
       let raw = pinInput.value.replace(/\D/g, '').slice(0, 6);
@@ -106,12 +106,6 @@
 
       if (raw.length === 6) {
         connectBtn.classList.add('btn-ready');
-        // Auto connect after a 400ms pause if user types all 6 digits
-        setTimeout(() => {
-          if (pinInput.value.replace(/\D/g, '').length === 6 && !localStream && !peerConnection) {
-            connectBtn.click();
-          }
-        }, 400);
       } else {
         connectBtn.classList.remove('btn-ready');
       }
@@ -126,12 +120,6 @@
     if (raw.length === 6) {
       pinInput.value = raw.slice(0, 3) + ' ' + raw.slice(3);
       connectBtn.classList.add('btn-ready');
-      // Auto connect when opened from QR scan!
-      setTimeout(() => {
-        if (!localStream && !peerConnection) {
-          connectBtn.click();
-        }
-      }, 500);
     } else {
       pinInput.value = codeFromUrl.trim();
     }
