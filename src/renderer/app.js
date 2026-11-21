@@ -276,7 +276,8 @@
   function registerWithServer() {
     if (!socket) return;
     socket.emit('register-receiver', {
-      deviceName: currentSettings.deviceName || 'Homak Cast Receiver'
+      deviceName: currentSettings.deviceName || 'Homak Cast Receiver',
+      requireApproval: !!currentSettings.requireApproval
     }, (res) => {
       if (res && res.ok) {
         updatePinDisplay(res.pin, res.qrUrl);
@@ -460,7 +461,10 @@
     tag.className = 'tile-tag';
     let label = senderInfo.model || senderInfo.deviceName || 'Cihaz';
     if (senderInfo.os && !label.includes(senderInfo.os)) label += ` (${senderInfo.os})`;
-    tag.innerHTML = `<span class="dot-green"></span> ${label}`;
+    const dot = document.createElement('span');
+    dot.className = 'dot-green';
+    tag.appendChild(dot);
+    tag.appendChild(document.createTextNode(` ${label}`));
     tile.appendChild(tag);
 
     // Remove primary placeholder if present

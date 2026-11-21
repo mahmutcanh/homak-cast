@@ -7,6 +7,7 @@
     "start": "electron .",
     "server": "node server/signaling-server.js",
     "test": "node test/test_server.js",
+    "test:security": "node test/test_security.js",
     "build:dir": "electron-builder --dir",
     "build:portable": "electron-builder --win portable",
     "build:installer": "electron-builder --win nsis",
@@ -65,7 +66,9 @@
       "!server/public/downloads/*",
       "!*.tar.gz",
       "!*.ps1",
-      "!deploy*.py"
+      "!*.py",
+      "!cast.md",
+      "!README.md"
     ]
   }
 }

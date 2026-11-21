@@ -37,6 +37,12 @@ async function createWindow() {
     }
   });
 
+  // Never let the renderer open new windows or navigate away from the local UI.
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith('file://')) event.preventDefault();
+  });
+
   mainWindow.removeMenu();
   mainWindow.setMenu(null);
   mainWindow.setMenuBarVisibility(false);
@@ -320,8 +326,16 @@ ipcMain.handle('save-recording', async (event, { buffer, filename }) => {
     if (!fs.existsSync(videosDir)) {
       fs.mkdirSync(videosDir, { recursive: true });
     }
-    const safeFilename = filename || `HomakCast_${Date.now()}.webm`;
+    if (!buffer || typeof buffer !== 'object' || !(buffer.byteLength > 0)) {
+      return { ok: false, error: 'Geçersiz kayıt verisi.' };
+    }
+    // Strip any directory components and force a .webm extension (no path traversal / executables).
+    const base = path.basename(String(filename || '')).replace(/[^\w.-]/g, '_').replace(/\.[^.]*$/, '');
+    const safeFilename = `${base || 'HomakCast_' + Date.now()}.webm`;
     const fullPath = path.join(videosDir, safeFilename);
+    if (path.dirname(fullPath) !== videosDir) {
+      return { ok: false, error: 'Geçersiz dosya adı.' };
+    }
     fs.writeFileSync(fullPath, Buffer.from(buffer));
     console.log('[Recording] File saved successfully:', fullPath);
     return { ok: true, filePath: fullPath };
