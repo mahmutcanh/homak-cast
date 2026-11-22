@@ -16,7 +16,18 @@ if (!fs.existsSync(APPDATA_DIR)) {
 
 const SETTINGS_FILE = path.join(APPDATA_DIR, 'settings.json');
 
+const DEFAULT_COMPANY_NAME = 'The Land of Legends';
+
+/** Trimmed, single-line, max 60 chars; falls back to the default brand when empty. */
+function normalizeCompanyName(value) {
+  const text = typeof value === 'string'
+    ? Array.from(value).map((ch) => (ch.charCodeAt(0) < 32 || ch.charCodeAt(0) === 127 ? ' ' : ch)).join('').split(' ').filter(Boolean).join(' ')
+    : '';
+  return text.slice(0, 60) || DEFAULT_COMPANY_NAME;
+}
+
 const defaultConfig = {
+  companyName: DEFAULT_COMPANY_NAME, // shown in window title, tray and UI header (set in receiver settings)
   port: 5240,
   httpsPort: 5241, // LAN HTTPS (self-signed) so phones get a secure context for screen capture
   signalingServerUrl: 'https://cast.homaklab.com',
@@ -54,6 +65,7 @@ function loadSettings() {
 function saveSettings(newSettings) {
   try {
     const merged = { ...loadSettings(), ...newSettings };
+    merged.companyName = normalizeCompanyName(merged.companyName);
     fs.writeFileSync(SETTINGS_FILE, JSON.stringify(merged, null, 2), 'utf8');
     return merged;
   } catch (err) {
@@ -88,6 +100,8 @@ module.exports = {
   APPDATA_DIR,
   SETTINGS_FILE,
   defaultConfig,
+  DEFAULT_COMPANY_NAME,
+  normalizeCompanyName,
   loadSettings,
   saveSettings,
   getNetworkAddresses

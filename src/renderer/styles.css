@@ -905,6 +905,15 @@ body.theme-lol .tab-btn.active {
   margin-bottom: 12px;
 }
 
+.lol-brand-name {
+  font-size: 40px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #0f172a;
+  margin: 0 0 12px;
+  text-transform: uppercase;
+}
+
 .lol-hero-title {
   font-size: 26px;
   font-weight: 900;

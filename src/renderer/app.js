@@ -79,6 +79,10 @@
   const closeSettingsModalBtn = document.getElementById('closeSettingsModalBtn');
   const settingSignalingUrl = document.getElementById('settingSignalingUrl');
   const settingDeviceName = document.getElementById('settingDeviceName');
+  const settingCompanyName = document.getElementById('settingCompanyName');
+  const brandBadge = document.getElementById('brandBadge');
+  const brandLogo = document.getElementById('brandLogo');
+  const brandNameText = document.getElementById('brandNameText');
   const settingPort = document.getElementById('settingPort');
   const settingRequireApproval = document.getElementById('settingRequireApproval');
   const settingAutoStart = document.getElementById('settingAutoStart');
@@ -124,6 +128,7 @@
     initCanvas();
 
     currentSettings = await window.electronAPI.getSettings();
+    applyBranding();
     activeAddressMode = currentSettings.preferredMode === 'cloud' ? 'cloud' : 'lan';
     connectSignaling(signalingUrlFor(activeAddressMode), true);
 
@@ -1003,8 +1008,30 @@
     activePendingApprovalSenderId = null;
   }
 
+  // --- Company branding (window title, header badge, standby title) ---
+  const DEFAULT_COMPANY = 'The Land of Legends';
+
+  function companyNameOf(settings) {
+    const name = String((settings && settings.companyName) || '').trim();
+    return name || DEFAULT_COMPANY;
+  }
+
+  function applyBranding() {
+    const name = companyNameOf(currentSettings);
+    const isDefault = name.toLowerCase() === DEFAULT_COMPANY.toLowerCase();
+    document.title = name + ' — Cast Receiver';
+    if (brandBadge) brandBadge.textContent = name.toUpperCase();
+    // The bundled logo is the default company's; other companies get their name as the heading instead.
+    if (brandLogo) brandLogo.style.display = isDefault ? '' : 'none';
+    if (brandNameText) {
+      brandNameText.textContent = name;
+      brandNameText.style.display = isDefault ? 'none' : '';
+    }
+  }
+
   // --- Settings Modal Logic ---
   function openSettings() {
+    settingCompanyName.value = companyNameOf(currentSettings);
     settingSignalingUrl.value = currentSettings.signalingServerUrl || '';
     settingDeviceName.value = currentSettings.deviceName || 'The Land of Legends Receiver';
     settingPort.value = currentSettings.port || 5240;
@@ -1030,9 +1057,18 @@
       .filter(Boolean)
       .map(url => ({ urls: url }));
 
+    // A device name still equal to the old default ("<company> Receiver") follows the new company name.
+    const oldCompany = companyNameOf(currentSettings);
+    const newCompany = settingCompanyName.value.trim().slice(0, 60) || DEFAULT_COMPANY;
+    const typedDevice = settingDeviceName.value.trim();
+    const newDeviceName = !typedDevice || typedDevice === oldCompany + ' Receiver'
+      ? newCompany + ' Receiver'
+      : typedDevice;
+
     const updated = {
       signalingServerUrl: settingSignalingUrl.value.trim(),
-      deviceName: settingDeviceName.value.trim() || 'The Land of Legends Receiver',
+      companyName: newCompany,
+      deviceName: newDeviceName,
       port: parseInt(settingPort.value, 10) || 5240,
       requireApproval: settingRequireApproval.checked,
       autoStartOnBoot: settingAutoStart.checked,
@@ -1050,6 +1086,7 @@
       socket.emit('update-settings', currentSettings);
     }
     updateHeaderVisibility();
+    applyBranding();
     closeSettings();
   }
 

@@ -2,12 +2,22 @@ const { app, BrowserWindow, Tray, Menu, screen, ipcMain, nativeImage, session, d
 const path = require('path');
 const fs = require('fs');
 const SignalingServer = require('./server/signaling-server');
-const { loadSettings, saveSettings, getNetworkAddresses } = require('./server/config');
+const { loadSettings, saveSettings, getNetworkAddresses, normalizeCompanyName } = require('./server/config');
 
 let mainWindow = null;
 let tray = null;
 let signalingServer = null;
 let settings = loadSettings();
+
+function companyName() {
+  return normalizeCompanyName(settings.companyName);
+}
+function windowTitle() {
+  return companyName() + ' — Cast Receiver';
+}
+function trayTooltip() {
+  return companyName() + ' Cast Receiver — Kablosuz Ekran Alıcısı';
+}
 let currentDisplayId = null;
 
 // Hardware acceleration and WebRTC flags for 60fps performance without black screens
@@ -25,7 +35,7 @@ async function createWindow() {
     height: 800,
     minWidth: 960,
     minHeight: 640,
-    title: 'The Land of Legends — Cast Receiver',
+    title: windowTitle(),
     icon: path.join(__dirname, 'src', 'renderer', 'assets', 'icon.png'),
     backgroundColor: '#ffffff',
     autoHideMenuBar: true,
@@ -74,7 +84,7 @@ async function createWindow() {
       if (tray) {
         tray.displayBalloon({
           iconType: 'info',
-          title: 'Homak Cast',
+          title: companyName() + ' Cast',
           content: 'Uygulama sistem tepsisinde arka planda çalışıyor. Yayın almaya hazır.'
         });
       }
@@ -130,7 +140,7 @@ function createTray() {
   const trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
   tray = new Tray(trayIcon);
 
-  tray.setToolTip('Homak Cast Receiver — Kablosuz Ekran Alıcısı');
+  tray.setToolTip(trayTooltip());
 
   updateTrayMenu();
 
@@ -296,7 +306,12 @@ ipcMain.handle('get-settings', () => {
 });
 
 ipcMain.handle('save-settings', (event, newSettings) => {
-  settings = saveSettings(newSettings);
+  const saved = saveSettings(newSettings);
+  if (saved) {
+    settings = saved;
+    if (mainWindow) mainWindow.setTitle(windowTitle());
+    if (tray) tray.setToolTip(trayTooltip());
+  }
   return settings;
 });
 
