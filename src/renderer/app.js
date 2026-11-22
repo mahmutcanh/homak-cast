@@ -302,7 +302,15 @@
                   addresses.find(a => a.isLocal && !a.address.startsWith('172.') && !a.address.startsWith('10.77.')) ||
                   addresses.find(a => a.isLocal) || addresses[0];
       if (lan) {
-        lanBaseUrl = `http://${lan.address}:${port}`;
+        // Prefer the HTTPS listener: phones only allow screen capture in a secure context.
+        let httpsPort = null;
+        try {
+          const status = await fetch(`http://localhost:${port}/api/status`).then(r => r.json());
+          httpsPort = status && status.httpsPort;
+        } catch (e) {
+          console.warn('Could not read local server status:', e);
+        }
+        lanBaseUrl = httpsPort ? `https://${lan.address}:${httpsPort}` : `http://${lan.address}:${port}`;
         if (lanIpText) lanIpText.textContent = lanBaseUrl;
         refreshActiveAddressUI();
       }

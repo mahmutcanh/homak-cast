@@ -145,6 +145,35 @@ const connect = (url, opts = {}) => new Promise((res, rej) => {
   await wait(200);
   check('pending approval rejected when receiver drops', rejected);
 
+  // --- LAN HTTPS listener (self-signed) ---
+  const https = require('https');
+  const tlsSrv = new SignalingServer({ port: 5392, httpsPort: 5393 });
+  await tlsSrv.start();
+  const httpsGet = (p) => new Promise((res, rej) => https.get({ host: '127.0.0.1', port: 5393, path: p, rejectUnauthorized: false }, (resp) => {
+    const cert = resp.socket.getPeerCertificate(); let b = ''; resp.on('data', d => b += d); resp.on('end', () => res({ status: resp.statusCode, h: resp.headers, b, cert }));
+  }).on('error', rej));
+  const st = await httpsGet('/api/status');
+  check('https serves status + reports httpsPort', st.status === 200 && JSON.parse(st.b).httpsPort === 5393);
+  check('https cert covers 127.0.0.1 + localhost', /IP Address:127\.0\.0\.1/.test(st.cert.subjectaltname || '') && /DNS:localhost/.test(st.cert.subjectaltname || ''));
+  check('https cert is server-auth, not a CA', st.cert.ca !== true);
+  const fp1 = st.cert.fingerprint256;
+  const tlsRecv = await connect('https://127.0.0.1:5393', { rejectUnauthorized: false });
+  const tlsReg = await emitAck(tlsRecv, 'register-receiver', { deviceName: 'TLS' });
+  const tlsSender = await connect('https://127.0.0.1:5393', { rejectUnauthorized: false });
+  const tlsPair = await emitAck(tlsSender, 'request-pairing', { pin: tlsReg.pin });
+  check('pairing works over wss (secure context path)', tlsPair && tlsPair.ok === true);
+  tlsRecv.disconnect(); tlsSender.disconnect();
+  await tlsSrv.stop();
+  const tlsSrv2 = new SignalingServer({ port: 5392, httpsPort: 5393 });
+  await tlsSrv2.start();
+  const st2 = await httpsGet('/api/status');
+  check('https cert reused across restarts (no new warning)', st2.cert.fingerprint256 === fp1);
+  await tlsSrv2.stop();
+  const plain = new SignalingServer({ port: 5394 });
+  await plain.start();
+  check('https disabled unless requested', plain.httpsServer === null);
+  await plain.stop();
+
   const failed = results.filter(x => !x[1]);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);
   process.exit(failed.length ? 1 : 0);

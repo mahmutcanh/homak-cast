@@ -1,11 +1,13 @@
 const express = require('express');
 const http = require('http');
+const https = require('https');
 const { Server } = require('socket.io');
 const path = require('path');
 const QRCode = require('qrcode');
 const { loadSettings, saveSettings, getNetworkAddresses } = require('./config');
 const crypto = require('crypto');
 const { buildTurnServers } = require('./turn');
+const { loadOrCreateCert } = require('./tls');
 
 const RATE_MAX_FAILS = 5;
 const RATE_WINDOW_MS = 10 * 60 * 1000;
@@ -93,6 +95,8 @@ function cleanText(value, max = 80, fallback = '') {
 class SignalingServer {
   constructor(options = {}) {
     this.port = options.port || process.env.PORT || loadSettings().port || 5240;
+    this.httpsPort = options.httpsPort || process.env.HTTPS_PORT || null;
+    this.httpsServer = null;
     this.publicHost = options.publicHost || process.env.PUBLIC_HOST || 'cast.homaklab.com';
     this.app = express();
     this.server = http.createServer(this.app);
@@ -349,6 +353,7 @@ class SignalingServer {
         service: 'Homak Cast Signaling & Web Sender',
         domain: this.publicHost,
         port: this.port,
+        httpsPort: this.httpsServer ? Number(this.httpsPort) : null,
         addresses,
         receiverOnline: this.receiversByPin.size > 0,
         totalReceivers: this.receiversByPin.size,
@@ -807,28 +812,54 @@ class SignalingServer {
     }
   }
 
+  async startHttps(host) {
+    if (!this.httpsPort) return;
+    try {
+      const { key, cert } = await loadOrCreateCert();
+      const httpsServer = https.createServer({ key, cert }, this.app);
+      this.io.attach(httpsServer);
+      await new Promise((resolve, reject) => {
+        httpsServer.once('error', reject);
+        httpsServer.listen(this.httpsPort, host, resolve);
+      });
+      this.httpsServer = httpsServer;
+      console.log(`  HTTPS (self-signed, LAN): port ${this.httpsPort}`);
+    } catch (err) {
+      // HTTPS is an optional extra: keep the plain HTTP server usable.
+      console.error('[HomakCast] HTTPS listener failed, continuing with HTTP only:', err.message);
+      this.httpsServer = null;
+    }
+  }
+
   start() {
     return new Promise((resolve, reject) => {
       // BIND_HOST=127.0.0.1 on the public server so only the reverse proxy/tunnel can reach it.
-      this.server.listen(this.port, process.env.BIND_HOST || '0.0.0.0', () => {
-        const addresses = getNetworkAddresses();
-        console.log(`\n======================================================`);
+      const host = process.env.BIND_HOST || '0.0.0.0';
+      this.server.once('error', reject);
+      this.server.listen(this.port, host, async () => {
+        console.log(`
+======================================================`);
         console.log(`  HOMAK CAST SIGNALING & WEB SENDER SERVER STARTED`);
         console.log(`  Domain: https://${this.publicHost}`);
         console.log(`  Local Port: ${this.port}`);
-        console.log(`======================================================\n`);
+        await this.startHttps(host);
+        console.log(`======================================================
+`);
         resolve(this.port);
       });
-      this.server.on('error', reject);
     });
   }
 
   stop() {
+    const closeServer = (srv) => new Promise((resolve) => {
+      if (!srv || !srv.listening) return resolve();
+      srv.close(() => resolve());
+    });
     return new Promise((resolve) => {
-      this.io.close(() => {
-        this.server.close(() => {
-          resolve();
-        });
+      this.io.close(async () => {
+        await closeServer(this.server);
+        await closeServer(this.httpsServer);
+        resolve();
       });
     });
   }

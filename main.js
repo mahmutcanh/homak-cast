@@ -395,7 +395,7 @@ app.whenReady().then(async () => {
   }
 
   // 1. Start embedded Signaling & Web Sender Server
-  signalingServer = new SignalingServer({ port: settings.port || 5240 });
+  signalingServer = new SignalingServer({ port: settings.port || 5240, httpsPort: settings.httpsPort || 5241 });
   try {
     await signalingServer.start();
   } catch (err) {
