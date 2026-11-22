@@ -20,6 +20,7 @@ const defaultConfig = {
   port: 5240,
   signalingServerUrl: 'https://cast.homaklab.com',
   deviceName: 'The Land of Legends Receiver',
+  preferredMode: 'lan', // 'lan' = this PC is the server (default), 'cloud' = cast.homaklab.com
   requireApproval: false, // Default: no approval needed (connects immediately), can be enabled in settings
   showHeaderInFullscreen: false, // Default: clean immersive fullscreen video without header
   autoStartOnBoot: true, // Auto-start with Windows on boot

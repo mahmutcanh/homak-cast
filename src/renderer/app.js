@@ -103,7 +103,7 @@
   let appMode = 'receiver'; // 'receiver' or 'sender'
   let isFullscreenState = false;
   let isStreamingState = false;
-  let activeAddressMode = 'cloud'; // 'cloud' or 'lan'
+  let activeAddressMode = 'lan'; // 'lan' = this PC is the server (default), 'cloud' = cast.homaklab.com
   let cloudBaseUrl = 'https://cast.homaklab.com';
   let lanBaseUrl = '';
   let activeConnectUrl = '';
@@ -124,7 +124,8 @@
     initCanvas();
 
     currentSettings = await window.electronAPI.getSettings();
-    connectSignaling(signalingUrlFor('cloud'), true);
+    activeAddressMode = currentSettings.preferredMode === 'cloud' ? 'cloud' : 'lan';
+    connectSignaling(signalingUrlFor(activeAddressMode), true);
 
     setupDisplays();
     setupAudioDevices();
@@ -158,11 +159,11 @@
 
     s.on('connect_error', (err) => {
       console.warn(`[Receiver] Failed to connect to ${url}:`, err.message);
-      const localUrl = signalingUrlFor('lan');
-      if (!connected && allowLocalFallback && socket === s && url !== localUrl) {
-        console.log(`[Receiver] Falling back to local embedded server: ${localUrl}`);
-        activeAddressMode = 'lan';
-        connectSignaling(localUrl, false);
+      if (!connected && allowLocalFallback && socket === s) {
+        const fallbackMode = activeAddressMode === 'lan' ? 'cloud' : 'lan';
+        console.log(`[Receiver] Falling back to ${fallbackMode} server`);
+        activeAddressMode = fallbackMode;
+        connectSignaling(signalingUrlFor(fallbackMode), false);
       }
     });
 
@@ -178,6 +179,9 @@
     activeAddressMode = mode;
     currentPin = '';
     connectSignaling(signalingUrlFor(mode), false);
+    window.electronAPI.saveSettings({ preferredMode: mode })
+      .then((saved) => { if (saved) currentSettings = saved; })
+      .catch((err) => console.warn('Could not save preferred mode:', err));
   }
 
   function initCanvas() {
@@ -246,6 +250,7 @@
 
   function refreshActiveAddressUI() {
     if (!currentPin) return;
+    if (activeAddressMode === 'lan' && !lanBaseUrl) return; // wait for LAN address detection
 
     const port = currentSettings.port || 5240;
     cloudBaseUrl = 'https://cast.homaklab.com';
@@ -274,22 +279,18 @@
     }
 
     // Generate high-contrast QR code for the exact active URL
-    const fetchApiBase = 'https://cast.homaklab.com';
-    fetch(`${fetchApiBase}/api/qr?code=${currentPin}&url=${encodeURIComponent(activeConnectUrl)}`)
+    const localApi = `http://localhost:${port}`;
+    const cloudApi = 'https://cast.homaklab.com';
+    const [firstApi, secondApi] = activeAddressMode === 'lan' ? [localApi, cloudApi] : [cloudApi, localApi];
+    const fetchQr = (base) => fetch(`${base}/api/qr?code=${currentPin}&url=${encodeURIComponent(activeConnectUrl)}`)
       .then(r => r.json())
       .then(data => {
-        if (data && data.ok && data.qr) {
-          qrImage.src = data.qr;
-        }
-      })
-      .catch(() => {
-        fetch(`http://localhost:${port}/api/qr?code=${currentPin}&url=${encodeURIComponent(activeConnectUrl)}`)
-          .then(r => r.json())
-          .then(data => {
-            if (data && data.ok && data.qr) qrImage.src = data.qr;
-          })
-          .catch(err => console.warn('QR error:', err));
+        if (!data || !data.ok || !data.qr) throw new Error('QR yanıtı geçersiz');
+        qrImage.src = data.qr;
       });
+    fetchQr(firstApi)
+      .catch(() => fetchQr(secondApi))
+      .catch(err => console.warn('QR error:', err));
   }
 
   async function setupLanAddressInfo() {
@@ -303,6 +304,7 @@
       if (lan) {
         lanBaseUrl = `http://${lan.address}:${port}`;
         if (lanIpText) lanIpText.textContent = lanBaseUrl;
+        refreshActiveAddressUI();
       }
     } catch (e) {
       console.warn('Could not get network addresses:', e);
@@ -760,6 +762,10 @@
   }
 
   startDesktopCastBtn.addEventListener('click', async () => {
+    if (activeAddressMode === 'lan') {
+      notify("Başka bir PC'ye yayın için Alıcı sekmesinde \"Bulut\" moduna geçin. Yerel modda yalnızca bu PC'ye bağlanılır.");
+      return;
+    }
     const pin = desktopPinInput.value.trim().replace(/\s+/g, '');
     if (!pin || pin.length !== 6) {
       showDesktopError('Lütfen yansıtılacak ekrandaki 6 haneli kodu girin.');
