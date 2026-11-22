@@ -87,6 +87,26 @@
   const pickLogoBtn = document.getElementById('pickLogoBtn');
   const clearLogoBtn = document.getElementById('clearLogoBtn');
   const logoHint = document.getElementById('logoHint');
+  const openAdminBtn = document.getElementById('openAdminBtn');
+  const adminModal = document.getElementById('adminModal');
+  const closeAdminModalBtn = document.getElementById('closeAdminModalBtn');
+  const adminAuthView = document.getElementById('adminAuthView');
+  const adminAuthHint = document.getElementById('adminAuthHint');
+  const adminPasswordInput = document.getElementById('adminPasswordInput');
+  const adminPasswordRepeatGroup = document.getElementById('adminPasswordRepeatGroup');
+  const adminPasswordRepeat = document.getElementById('adminPasswordRepeat');
+  const adminAuthMessage = document.getElementById('adminAuthMessage');
+  const adminAuthBtn = document.getElementById('adminAuthBtn');
+  const adminPanelView = document.getElementById('adminPanelView');
+  const adminLicenseStatus = document.getElementById('adminLicenseStatus');
+  const licenseHolder = document.getElementById('licenseHolder');
+  const licenseExpires = document.getElementById('licenseExpires');
+  const licenseMaxDevices = document.getElementById('licenseMaxDevices');
+  const licenseLockBranding = document.getElementById('licenseLockBranding');
+  const adminNewPassword = document.getElementById('adminNewPassword');
+  const adminMessage = document.getElementById('adminMessage');
+  const adminSaveBtn = document.getElementById('adminSaveBtn');
+  const adminLogoutBtn = document.getElementById('adminLogoutBtn');
   const settingPort = document.getElementById('settingPort');
   const settingRequireApproval = document.getElementById('settingRequireApproval');
   const settingAutoStart = document.getElementById('settingAutoStart');
@@ -134,6 +154,9 @@
     currentSettings = await window.electronAPI.getSettings();
     customLogo = await window.electronAPI.getLogo();
     applyBranding();
+    window.electronAPI.adminStatus().then((state) => {
+      if (state && state.status && state.status.expired) notify('Lisans süresi dolmuş: yeni yayın kabul edilmiyor. Yönetici ekranından yenileyin.');
+    }).catch(() => {});
     activeAddressMode = currentSettings.preferredMode === 'cloud' ? 'cloud' : 'lan';
     connectSignaling(signalingUrlFor(activeAddressMode), true);
 
@@ -1043,6 +1066,111 @@
     if (clearLogoBtn) clearLogoBtn.disabled = !customLogo;
   }
 
+  // --- Admin (local password, license, limits) ---
+  function setBrandingControlsLocked(locked) {
+    settingCompanyName.disabled = locked;
+    pickLogoBtn.disabled = locked;
+    clearLogoBtn.disabled = locked || !customLogo;
+    if (locked) logoHint.textContent = 'Şirket adı ve logo yönetici tarafından kilitlenmiş.';
+    else logoHint.textContent = LOGO_HINT;
+  }
+
+  async function refreshBrandingLock() {
+    try {
+      const state = await window.electronAPI.adminStatus();
+      setBrandingControlsLocked(!!(state && state.license.lockBranding && !state.unlocked));
+    } catch (err) {
+      console.warn('Could not read admin state:', err);
+    }
+  }
+
+  function licenseStatusText(state) {
+    const s = state.status;
+    if (s.expired) return 'Lisans durumu: SÜRESİ DOLMUŞ (yeni yayın kabul edilmiyor)';
+    if (s.daysLeft === null) return `Lisans durumu: geçerli (süresiz), en fazla ${s.maxDevices} cihaz`;
+    return `Lisans durumu: geçerli, ${s.daysLeft} gün kaldı, en fazla ${s.maxDevices} cihaz`;
+  }
+
+  function showAdminPanel(state) {
+    adminAuthView.style.display = 'none';
+    adminPanelView.style.display = '';
+    adminLicenseStatus.textContent = licenseStatusText(state);
+    licenseHolder.value = state.license.holder;
+    licenseExpires.value = state.license.expiresAt;
+    licenseMaxDevices.value = String(state.license.maxDevices);
+    licenseLockBranding.checked = !!state.license.lockBranding;
+    adminNewPassword.value = '';
+    adminMessage.textContent = '';
+  }
+
+  function showAdminAuth(state) {
+    adminPanelView.style.display = 'none';
+    adminAuthView.style.display = '';
+    adminPasswordInput.value = '';
+    adminPasswordRepeat.value = '';
+    adminAuthMessage.textContent = '';
+    const setup = !state.hasPassword;
+    adminPasswordRepeatGroup.style.display = setup ? '' : 'none';
+    adminAuthBtn.textContent = setup ? 'Şifreyi Belirle' : 'Giriş';
+    adminAuthHint.textContent = setup
+      ? 'İlk kurulum: bu alıcı için bir yönetici şifresi belirleyin (en az 6 karakter). Lisans ve limitler bu şifreyle korunur.'
+      : 'Lisans ve limitleri değiştirmek için yönetici şifresini girin.';
+  }
+
+  async function openAdmin() {
+    const state = await window.electronAPI.adminStatus();
+    adminModal.style.display = 'flex';
+    if (state.unlocked) showAdminPanel(state); else showAdminAuth(state);
+  }
+
+  function closeAdmin() {
+    adminModal.style.display = 'none';
+    adminPasswordInput.value = '';
+    adminPasswordRepeat.value = '';
+    adminNewPassword.value = '';
+    refreshBrandingLock();
+  }
+
+  async function submitAdminAuth() {
+    const state = await window.electronAPI.adminStatus();
+    const password = adminPasswordInput.value;
+    let result;
+    if (!state.hasPassword) {
+      if (password !== adminPasswordRepeat.value) {
+        adminAuthMessage.textContent = 'Şifreler eşleşmiyor.';
+        return;
+      }
+      result = await window.electronAPI.adminSetPassword(password);
+    } else {
+      result = await window.electronAPI.adminLogin(password);
+    }
+    if (result && result.ok) {
+      showAdminPanel(result.state);
+    } else {
+      adminAuthMessage.textContent = (result && result.error) || 'Giriş yapılamadı.';
+    }
+  }
+
+  async function saveAdminLicense() {
+    const result = await window.electronAPI.adminSaveLicense({
+      holder: licenseHolder.value,
+      expiresAt: licenseExpires.value,
+      maxDevices: Number(licenseMaxDevices.value),
+      lockBranding: licenseLockBranding.checked
+    }, adminNewPassword.value);
+    if (result && result.ok) {
+      showAdminPanel(result.state);
+      adminMessage.textContent = 'Kaydedildi.';
+    } else {
+      adminMessage.textContent = (result && result.error) || 'Kaydedilemedi.';
+    }
+  }
+
+  async function adminLogout() {
+    await window.electronAPI.adminLogout();
+    closeAdmin();
+  }
+
   async function pickLogo() {
     const result = await window.electronAPI.pickLogo();
     if (result && result.dataUrl) {
@@ -1059,11 +1187,13 @@
     customLogo = null;
     logoHint.textContent = LOGO_HINT;
     applyBranding();
+    refreshBrandingLock();
   }
 
   // --- Settings Modal Logic ---
   function openSettings() {
     settingCompanyName.value = companyNameOf(currentSettings);
+    refreshBrandingLock();
     settingSignalingUrl.value = currentSettings.signalingServerUrl || '';
     settingDeviceName.value = currentSettings.deviceName || 'The Land of Legends Receiver';
     settingPort.value = currentSettings.port || 5240;
@@ -1230,6 +1360,14 @@
     // Settings modal events
     openSettingsBtn.addEventListener('click', openSettings);
     closeSettingsModalBtn.addEventListener('click', closeSettings);
+    if (openAdminBtn) openAdminBtn.addEventListener('click', openAdmin);
+    if (closeAdminModalBtn) closeAdminModalBtn.addEventListener('click', closeAdmin);
+    if (adminAuthBtn) adminAuthBtn.addEventListener('click', submitAdminAuth);
+    if (adminSaveBtn) adminSaveBtn.addEventListener('click', saveAdminLicense);
+    if (adminLogoutBtn) adminLogoutBtn.addEventListener('click', adminLogout);
+    [adminPasswordInput, adminPasswordRepeat].forEach((input) => {
+      if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitAdminAuth(); });
+    });
     saveSettingsBtn.addEventListener('click', saveSettings);
     if (pickLogoBtn) pickLogoBtn.addEventListener('click', pickLogo);
     if (clearLogoBtn) clearLogoBtn.addEventListener('click', clearLogo);

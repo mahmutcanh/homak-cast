@@ -33,6 +33,8 @@ class SettingsActivity : AppCompatActivity() {
             refreshLogo()
         }
         refreshLogo()
+        val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull().orEmpty()
+        binding.versionText.text = getString(R.string.version_label, version)
     }
 
     /** The logo applies as soon as it is picked or removed; Save only covers the text fields. */

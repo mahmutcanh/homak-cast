@@ -4,11 +4,13 @@ import android.content.Context
 import android.hardware.display.DisplayManager
 import android.media.projection.MediaProjection
 import android.media.MediaRecorder
+import android.util.Log
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.DisplayMetrics
 import android.view.WindowManager
+import com.homaklab.cast.DebugLog
 import com.homaklab.cast.audio.SystemAudioCapture
 import com.homaklab.cast.signaling.CandidateInit
 import com.homaklab.cast.signaling.PairingConfig
@@ -60,7 +62,15 @@ class CastSession(
     /** Runs on the session thread; late callbacks arriving after teardown are dropped instead of crashing. */
     private fun post(task: () -> Unit) {
         try {
-            worker.execute(task)
+            worker.execute {
+                try {
+                    task()
+                } catch (t: Throwable) {
+                    // Native/library failures (UnsatisfiedLinkError, NoClassDefFoundError, ...) must not kill the app silently.
+                    DebugLog.add("İstisna: ${t.javaClass.simpleName}: ${t.message}\n${Log.getStackTraceString(t)}")
+                    finish("Beklenmeyen hata: ${t.javaClass.simpleName}: ${t.message}", notifyServer = true, failed = true)
+                }
+            }
         } catch (_: RejectedExecutionException) {
             // session already finished
         }
@@ -90,6 +100,7 @@ class CastSession(
     private var finished = false
 
     fun start() = post {
+        DebugLog.add("Oturum başlıyor: sunucu=$serverUrl, ses=$captureAudio, fps=$requestedFps")
         events.onStatus(CastStatus.Connecting)
         try {
             signaling.connect()
@@ -103,30 +114,36 @@ class CastSession(
     // ---- SignalingClient.Listener (Socket.IO thread -> worker) ----
 
     override fun onConnected() {
+        DebugLog.add("Sunucuya bağlanıldı, eşleşme isteniyor")
         post { signaling.requestPairing(pin, deviceName, model, "Android ${Build.VERSION.RELEASE}") }
     }
 
     override fun onConnectError(message: String) {
+        DebugLog.add("Bağlantı hatası: $message")
         post { finish("Sunucuya bağlanılamadı ($serverUrl): $message", notifyServer = false, failed = true) }
     }
 
     override fun onWaitingApproval() {
+        DebugLog.add("Alıcı onayı bekleniyor")
         post { events.onStatus(CastStatus.WaitingApproval) }
     }
 
     override fun onPairingApproved(config: PairingConfig) {
+        DebugLog.add("Eşleşme onaylandı")
         post {
             if (finished) return@post
             pairingConfig = config
             try {
                 beginStreaming(config)
-            } catch (e: Exception) {
-                finish("Yayın başlatılamadı: ${e.message}", notifyServer = true, failed = true)
+            } catch (t: Throwable) {
+                DebugLog.add("Yayın başlatma istisnası: ${Log.getStackTraceString(t)}")
+                finish("Yayın başlatılamadı: ${t.javaClass.simpleName}: ${t.message}", notifyServer = true, failed = true)
             }
         }
     }
 
     override fun onPairingRejected(reason: String) {
+        DebugLog.add("Eşleşme reddedildi: $reason")
         post { finish(reason, notifyServer = false, failed = true) }
     }
 
@@ -161,6 +178,7 @@ class CastSession(
     }
 
     override fun onDisconnected(reason: String) {
+        DebugLog.add("Sunucu bağlantısı koptu: $reason")
         post { finish("Sunucu bağlantısı koptu ($reason).", notifyServer = false, failed = true) }
     }
 
@@ -348,6 +366,7 @@ class CastSession(
 
     private fun finish(reason: String?, notifyServer: Boolean, failed: Boolean = false) {
         if (finished) return
+        DebugLog.add("Oturum bitiyor (hata=$failed): $reason")
         finished = true
         disconnectTimer?.cancel(false)
         if (notifyServer) runCatching { signaling.stopStream() }

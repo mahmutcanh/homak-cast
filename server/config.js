@@ -15,6 +15,7 @@ if (!fs.existsSync(APPDATA_DIR)) {
 }
 
 const SETTINGS_FILE = path.join(APPDATA_DIR, 'settings.json');
+const { defaultLicense, normalizeLicense } = require('./license');
 
 const DEFAULT_COMPANY_NAME = 'The Land of Legends';
 
@@ -27,6 +28,8 @@ function normalizeCompanyName(value) {
 }
 
 const defaultConfig = {
+  adminPasswordHash: '', // scrypt hash of the local admin password; empty = not set yet
+  license: { ...defaultLicense }, // holder / expiry / device limit / branding lock (edited in the admin screen)
   companyName: DEFAULT_COMPANY_NAME, // shown in window title, tray and UI header (set in receiver settings)
   port: 5240,
   httpsPort: 5241, // LAN HTTPS (self-signed) so phones get a secure context for screen capture
@@ -54,7 +57,9 @@ function loadSettings() {
   try {
     if (fs.existsSync(SETTINGS_FILE)) {
       const data = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
-      return { ...defaultConfig, ...data };
+      const loaded = { ...defaultConfig, ...data };
+      loaded.license = normalizeLicense(loaded.license);
+      return loaded;
     }
   } catch (err) {
     console.error('Error reading settings file:', err);
@@ -66,6 +71,7 @@ function saveSettings(newSettings) {
   try {
     const merged = { ...loadSettings(), ...newSettings };
     merged.companyName = normalizeCompanyName(merged.companyName);
+    merged.license = normalizeLicense(merged.license);
     fs.writeFileSync(SETTINGS_FILE, JSON.stringify(merged, null, 2), 'utf8');
     return merged;
   } catch (err) {

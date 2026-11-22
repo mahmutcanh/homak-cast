@@ -1,17 +1,23 @@
 package com.homaklab.cast
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.View
+import android.widget.ScrollView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import java.net.Inet4Address
@@ -33,6 +39,8 @@ class MainActivity : AppCompatActivity() {
     private var pendingServer: String = ""
     private var pendingPin: String = ""
     private var pendingAudio: Boolean = false
+    private var lastReport: String = ""
+    private var lastErrorMessage: String = ""
 
     private val scanLauncher = registerForActivityResult(ScanContract()) { result ->
         result.contents?.let(::applyScannedText)
@@ -43,7 +51,7 @@ class MainActivity : AppCompatActivity() {
         if (result.resultCode == RESULT_OK && data != null) {
             startCastService(data)
         } else {
-            toast(getString(R.string.err_projection_denied))
+            showError(getString(R.string.err_projection_denied))
         }
     }
 
@@ -64,6 +72,11 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        savedInstanceState?.let {
+            pendingServer = it.getString(STATE_SERVER, "")
+            pendingPin = it.getString(STATE_PIN, "")
+            pendingAudio = it.getBoolean(STATE_AUDIO, false)
+        }
 
         if (prefs.getInt(KEY_FPS, 30) >= 60) binding.fps60.isChecked = true else binding.fps30.isChecked = true
         if (SystemAudioCapture.isSupported) {
@@ -90,11 +103,20 @@ class MainActivity : AppCompatActivity() {
             )
         }
         binding.startButton.setOnClickListener { onStartClicked() }
+        binding.copyErrorButton.setOnClickListener { copyToClipboard(lastReport) }
         binding.stopButton.setOnClickListener {
             startService(Intent(this, CastService::class.java).setAction(CastService.ACTION_STOP))
         }
 
         intent?.data?.toString()?.let(::applyScannedText) // homak links opened from a browser/QR app
+        ErrorReport.pendingCrash(this)?.let(::showCrashDialog)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(STATE_SERVER, pendingServer)
+        outState.putString(STATE_PIN, pendingPin)
+        outState.putBoolean(STATE_AUDIO, pendingAudio)
     }
 
     override fun onResume() {
@@ -160,6 +182,8 @@ class MainActivity : AppCompatActivity() {
         }
         binding.serverLayout.error = null
 
+        clearError()
+        DebugLog.add("Başlat: hedef=${if (explicitServer != null) "elle girilen" else "otomatik"}, ses=${binding.audioSwitch.isChecked}, fps=${selectedFps()}")
         pendingPin = pin
         pendingAudio = binding.audioSwitch.isChecked && SystemAudioCapture.isSupported
         prefs.edit()
@@ -188,7 +212,7 @@ class MainActivity : AppCompatActivity() {
         val local = localIpv4()
         if (local == null) {
             if (domain == null) {
-                toast(getString(R.string.err_no_receiver))
+                showError(getString(R.string.err_no_receiver))
             } else {
                 pendingServer = domain
                 requestPermissionsAndStart()
@@ -206,9 +230,11 @@ class MainActivity : AppCompatActivity() {
                 binding.statusText.text = getString(R.string.status_idle)
                 val server = found ?: domain
                 if (server == null) {
-                    toast(getString(R.string.err_no_receiver))
+                    showError(getString(R.string.err_no_receiver))
                 } else {
+                    DebugLog.add(if (found != null) "Yerel alıcı bulundu: $found" else "Yerel alıcı yok, domain: $server")
                     pendingServer = server
+                    toast(getString(if (found != null) R.string.found_local else R.string.using_domain, Uri.parse(server).host))
                     requestPermissionsAndStart()
                 }
             }
@@ -281,6 +307,43 @@ class MainActivity : AppCompatActivity() {
             is CastStatus.Ended -> status.reason
             is CastStatus.Failed -> getString(R.string.status_failed, status.message)
         }
+        if (status is CastStatus.Failed) showError(status.message)
+    }
+
+    /** Shows the problem on screen (selectable) with a button that copies a full report for support or any assistant. */
+    private fun showError(message: String) {
+        if (message != lastErrorMessage) DebugLog.add("HATA: $message")
+        lastErrorMessage = message
+        lastReport = ErrorReport.build(this, message)
+        binding.errorText.text = message
+        binding.errorGroup.visibility = View.VISIBLE
+    }
+
+    private fun clearError() {
+        lastErrorMessage = ""
+        binding.errorGroup.visibility = View.GONE
+    }
+
+    private fun copyToClipboard(text: String) {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("Homak Cast hata raporu", text))
+        toast(getString(R.string.report_copied))
+    }
+
+    private fun showCrashDialog(report: String) {
+        val body = TextView(this).apply {
+            text = report
+            textSize = 11f
+            setTextIsSelectable(true)
+            setPadding(48, 24, 48, 24)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.crash_title)
+            .setView(ScrollView(this).apply { addView(body) })
+            .setPositiveButton(R.string.copy_report) { _, _ -> copyToClipboard(report) }
+            .setNegativeButton(R.string.crash_close, null)
+            .setOnDismissListener { ErrorReport.clearCrash(this) }
+            .show()
     }
 
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
@@ -288,6 +351,9 @@ class MainActivity : AppCompatActivity() {
     private companion object {
         const val KEY_DOMAIN = "domain"
         const val KEY_COMPANY = "company"
+        const val STATE_SERVER = "pending_server"
+        const val STATE_PIN = "pending_pin"
+        const val STATE_AUDIO = "pending_audio"
         const val KEY_FPS = "fps"
         const val KEY_AUDIO = "audio"
     }

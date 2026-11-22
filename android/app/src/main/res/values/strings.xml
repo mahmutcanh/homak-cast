@@ -19,6 +19,13 @@
     <string name="err_domain">Geçersiz domain.</string>
     <string name="err_no_receiver">Yerel ağda bu kodlu alıcı bulunamadı. Aynı Wi-Fi\'de olduğundan emin ol ya da Ayarlar\'dan domain ekle.</string>
     <string name="scan_qr">QR kod okut</string>
+    <string name="found_local">Yerel alıcı bulundu: %1$s</string>
+    <string name="using_domain">Yerel alıcı bulunamadı, domain kullanılıyor: %1$s</string>
+    <string name="version_label">Sürüm %1$s</string>
+    <string name="copy_report">Hata raporunu kopyala</string>
+    <string name="report_copied">Rapor panoya kopyalandı. İstediğin yapay zekaya ya da destek ekibine yapıştırabilirsin.</string>
+    <string name="crash_title">Uygulama beklenmedik şekilde kapandı</string>
+    <string name="crash_close">Kapat</string>
     <string name="status_searching">Alıcı aranıyor…</string>
     <string name="advanced_show">Gelişmiş ayarlar</string>
     <string name="advanced_hide">Gelişmiş ayarları gizle</string>

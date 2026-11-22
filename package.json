@@ -6,7 +6,7 @@
   "scripts": {
     "start": "electron .",
     "server": "node server/signaling-server.js",
-    "test": "node test/test_server.js && node test/test_brand.js",
+    "test": "node test/test_server.js && node test/test_brand.js && node test/test_license.js",
     "test:security": "node test/test_security.js",
     "build:dir": "electron-builder --dir",
     "build:portable": "electron-builder --win portable",

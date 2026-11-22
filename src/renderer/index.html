@@ -284,6 +284,74 @@
       </div>
     </div>
 
+    <!-- 3b. ADMIN MODAL (local password, license and limits) -->
+    <div id="adminModal" class="modal-overlay" style="display: none;">
+      <div class="modal-box modal-settings">
+        <div class="settings-header">
+          <h2>🔒 Yönetici</h2>
+          <button id="closeAdminModalBtn" class="btn-icon-close">✕</button>
+        </div>
+
+        <div class="settings-form">
+          <div id="adminAuthView">
+            <small class="form-hint" id="adminAuthHint"></small>
+            <div class="form-group">
+              <label for="adminPasswordInput">Yönetici şifresi:</label>
+              <input type="password" id="adminPasswordInput" class="form-input" autocomplete="off">
+            </div>
+            <div class="form-group" id="adminPasswordRepeatGroup" style="display: none;">
+              <label for="adminPasswordRepeat">Şifre (tekrar):</label>
+              <input type="password" id="adminPasswordRepeat" class="form-input" autocomplete="off">
+            </div>
+            <small class="form-hint" id="adminAuthMessage"></small>
+            <div class="modal-actions">
+              <button id="adminAuthBtn" class="btn btn-primary">Giriş</button>
+            </div>
+          </div>
+
+          <div id="adminPanelView" style="display: none;">
+            <div class="form-group"><strong id="adminLicenseStatus"></strong></div>
+
+            <div class="form-group">
+              <label for="licenseHolder">Lisans sahibi (şirket):</label>
+              <input type="text" id="licenseHolder" class="form-input" maxlength="60">
+            </div>
+
+            <div class="form-group">
+              <label for="licenseExpires">Geçerlilik bitiş tarihi (boş = süresiz):</label>
+              <input type="date" id="licenseExpires" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label for="licenseMaxDevices">Aynı anda en fazla cihaz:</label>
+              <select id="licenseMaxDevices" class="form-input">
+                <option value="1">1 cihaz</option>
+                <option value="2">2 cihaz</option>
+                <option value="3">3 cihaz</option>
+                <option value="4">4 cihaz</option>
+              </select>
+            </div>
+
+            <div class="form-group checkbox-group">
+              <input type="checkbox" id="licenseLockBranding">
+              <label for="licenseLockBranding">Şirket adı ve logo kilitli olsun (yalnızca yönetici değiştirebilsin)</label>
+            </div>
+
+            <div class="form-group">
+              <label for="adminNewPassword">Yeni yönetici şifresi (değiştirmek için doldur):</label>
+              <input type="password" id="adminNewPassword" class="form-input" autocomplete="new-password">
+            </div>
+
+            <small class="form-hint" id="adminMessage"></small>
+            <div class="modal-actions">
+              <button id="adminSaveBtn" class="btn btn-primary">Kaydet</button>
+              <button id="adminLogoutBtn" class="btn btn-secondary">Çıkış</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 4. SETTINGS MODAL -->
     <div id="settingsModal" class="modal-overlay" style="display: none;">
       <div class="modal-box modal-settings">
@@ -357,6 +425,7 @@
           <div class="modal-actions">
             <button id="saveSettingsBtn" class="btn btn-primary">Ayarları Kaydet</button>
             <button id="openRecordingsBtn" class="btn btn-secondary">📁 Kayıt Klasörünü Aç</button>
+            <button id="openAdminBtn" class="btn btn-secondary">🔒 Yönetici</button>
           </div>
         </div>
       </div>

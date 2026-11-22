@@ -75,11 +75,14 @@ object LanDiscovery {
         }
     }
 
-    /** 200 = known PIN; 409 = known PIN but the receiver is full (pairing will then show the proper message). */
+    /**
+     * 200 = known PIN; 409 = known PIN but the receiver is full; 403 = known PIN but its license expired.
+     * For 409/403 pairing is still attempted so the user sees the receiver's own message.
+     */
     private fun ownsPin(base: String, pin: String, connectTimeoutMs: Int, readTimeoutMs: Int): Boolean {
         val payload = JSONObject().put("code", pin).toString()
         val status = request("$base/api/verify-code", "POST", payload, connectTimeoutMs, readTimeoutMs)?.first
-        return status == 200 || status == 409
+        return status == 200 || status == 409 || status == 403
     }
 
     /** Returns (httpStatus, body) or null on any network failure. */

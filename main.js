@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const SignalingServer = require('./server/signaling-server');
 const { loadSettings, saveSettings, getNetworkAddresses, normalizeCompanyName, APPDATA_DIR } = require('./server/config');
+const { normalizeLicense, licenseStatus, passwordProblem, hashPassword, AdminSession } = require('./server/license');
 
 let mainWindow = null;
 let tray = null;
@@ -301,18 +302,77 @@ ipcMain.handle('quit-app', () => {
   app.quit();
 });
 
+// --- Local admin (password) + license ---
+const adminSession = new AdminSession();
+
+function adminState() {
+  return {
+    hasPassword: !!settings.adminPasswordHash,
+    unlocked: adminSession.active,
+    license: normalizeLicense(settings.license),
+    status: licenseStatus(settings.license)
+  };
+}
+
+/** The branding (company name / logo) is locked by the license until the admin unlocks it. */
+function brandingLocked() {
+  return normalizeLicense(settings.license).lockBranding && !adminSession.active;
+}
+
+ipcMain.handle('admin-status', () => adminState());
+
+ipcMain.handle('admin-set-password', (event, { password } = {}) => {
+  if (settings.adminPasswordHash) return { ok: false, error: 'Yönetici şifresi zaten belirlenmiş.' };
+  const problem = passwordProblem(password);
+  if (problem) return { ok: false, error: problem };
+  const saved = saveSettings({ adminPasswordHash: hashPassword(password) });
+  if (!saved) return { ok: false, error: 'Şifre kaydedilemedi.' };
+  settings = saved;
+  adminSession.start();
+  return { ok: true, state: adminState() };
+});
+
+ipcMain.handle('admin-login', (event, { password } = {}) => {
+  const result = adminSession.login(password, settings.adminPasswordHash);
+  return result.ok ? { ok: true, state: adminState() } : result;
+});
+
+ipcMain.handle('admin-logout', () => {
+  adminSession.logout();
+  return adminState();
+});
+
+ipcMain.handle('admin-save-license', (event, { license, newPassword } = {}) => {
+  if (!adminSession.active) return { ok: false, error: 'Yönetici girişi gerekli.' };
+  const update = { license: normalizeLicense(license) };
+  if (newPassword) {
+    const problem = passwordProblem(newPassword);
+    if (problem) return { ok: false, error: problem };
+    update.adminPasswordHash = hashPassword(newPassword);
+  }
+  const saved = saveSettings(update);
+  if (!saved) return { ok: false, error: 'Kaydedilemedi.' };
+  settings = saved;
+  return { ok: true, state: adminState() };
+});
+
 ipcMain.handle('get-settings', () => {
-  return loadSettings();
+  // The password hash never leaves the main process.
+  const { adminPasswordHash, ...safe } = loadSettings();
+  return safe;
 });
 
 ipcMain.handle('save-settings', (event, newSettings) => {
-  const saved = saveSettings(newSettings);
+  // Admin data and license only change through the admin handlers; branding may be locked by the license.
+  const { adminPasswordHash, license, ...rest } = newSettings || {};
+  if (brandingLocked()) delete rest.companyName;
   if (saved) {
     settings = saved;
     if (mainWindow) mainWindow.setTitle(windowTitle());
     if (tray) tray.setToolTip(trayTooltip());
   }
-  return settings;
+  const { adminPasswordHash: _hash, ...safeSettings } = settings;
+  return safeSettings;
 });
 
 // --- Company logo (chosen in settings, stored as a small PNG next to the settings file) ---
@@ -335,6 +395,7 @@ function readLogoDataUrl() {
 ipcMain.handle('get-logo', () => readLogoDataUrl());
 
 ipcMain.handle('pick-logo', async () => {
+  if (brandingLocked()) return { error: 'Logo yönetici tarafından kilitlenmiş.' };
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Logo seç',
     properties: ['openFile'],
@@ -364,6 +425,7 @@ ipcMain.handle('pick-logo', async () => {
 });
 
 ipcMain.handle('clear-logo', () => {
+  if (brandingLocked()) return false;
   try {
     if (fs.existsSync(LOGO_PATH)) fs.unlinkSync(LOGO_PATH);
   } catch (err) {
@@ -467,7 +529,11 @@ app.whenReady().then(async () => {
   }
 
   // 1. Start embedded Signaling & Web Sender Server
-  signalingServer = new SignalingServer({ port: settings.port || 5240, httpsPort: settings.httpsPort || 5241 });
+  signalingServer = new SignalingServer({
+    port: settings.port || 5240,
+    httpsPort: settings.httpsPort || 5241,
+    getLicense: () => settings.license
+  });
   try {
     await signalingServer.start();
   } catch (err) {

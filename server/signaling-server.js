@@ -8,6 +8,7 @@ const { loadSettings, saveSettings, getNetworkAddresses } = require('./config');
 const crypto = require('crypto');
 const { buildTurnServers } = require('./turn');
 const { loadOrCreateCert } = require('./tls');
+const { licenseStatus } = require('./license');
 
 const RATE_MAX_FAILS = 5;
 const RATE_WINDOW_MS = 10 * 60 * 1000;
@@ -110,6 +111,8 @@ class SignalingServer {
     });
 
     this.settings = loadSettings();
+    // Where the license comes from: the embedded server gets the receiver's live settings, standalone runs read the file.
+    this.getLicense = typeof options.getLicense === 'function' ? options.getLicense : () => loadSettings().license;
 
     // Multi-receiver state
     // pin -> { socketId, deviceName, createdAt, inUse: boolean, activeSenders: Map<senderSocketId, senderInfo>, maxSenders: number }
@@ -190,6 +193,20 @@ class SignalingServer {
       if (!this.receiversByPin.has(pin)) return pin;
     }
     throw new Error('PIN space exhausted');
+  }
+
+  /** Current license limits (expiry, device cap). */
+  limits() {
+    try {
+      return licenseStatus(this.getLicense());
+    } catch (err) {
+      return licenseStatus(null);
+    }
+  }
+
+  /** Simultaneous senders allowed for a receiver: the hard cap, lowered by the license. */
+  effectiveMax(receiver) {
+    return Math.min((receiver && receiver.maxSenders) || MAX_SENDERS, this.limits().maxDevices);
   }
 
   createReceiverRecord(socketId, deviceName, activeSenders = new Map()) {
@@ -405,8 +422,13 @@ class SignalingServer {
         this.recordFailedAttempt(clientIp);
         return res.status(400).json({ ok: false, error: 'Eşleştirme kodu hatalı veya alıcı çevrimdışı.' });
       }
-      if (receiver.activeSenders && receiver.activeSenders.size >= (receiver.maxSenders || MAX_SENDERS)) {
-        return res.status(409).json({ ok: false, error: 'Alıcı maksimum yayın kapasitesine ulaştı (4/4).' });
+      const limits = this.limits();
+      if (limits.expired) {
+        return res.status(403).json({ ok: false, error: 'Alıcının lisans süresi dolmuş. Yöneticiyle iletişime geçin.' });
+      }
+      const max = this.effectiveMax(receiver);
+      if (receiver.activeSenders && receiver.activeSenders.size >= max) {
+        return res.status(409).json({ ok: false, error: `Alıcı maksimum yayın kapasitesine ulaştı (${max}/${max}).` });
       }
       return res.json({ ok: true, message: 'Kod doğrulandı.', deviceName: receiver.deviceName });
     });
@@ -522,10 +544,19 @@ class SignalingServer {
           return;
         }
 
-        // Multi-Stream check (up to 4 streams simultaneously)
-        if (receiver.activeSenders && receiver.activeSenders.size >= (receiver.maxSenders || MAX_SENDERS) && !receiver.activeSenders.has(socket.id)) {
+        // License: expired licenses accept no new streams, and the license can lower the device cap.
+        if (this.limits().expired) {
           if (typeof callback === 'function') {
-            callback({ ok: false, error: 'Bu alıcı ekranı maksimum yayın kapasitesine ulaştı (4/4 cihaz aktif).' });
+            callback({ ok: false, error: 'Alıcının lisans süresi dolmuş. Yöneticiyle iletişime geçin.' });
+          }
+          return;
+        }
+
+        // Multi-Stream check (up to 4 streams simultaneously, fewer when the license says so)
+        const maxStreams = this.effectiveMax(receiver);
+        if (receiver.activeSenders && receiver.activeSenders.size >= maxStreams && !receiver.activeSenders.has(socket.id)) {
+          if (typeof callback === 'function') {
+            callback({ ok: false, error: `Bu alıcı ekranı maksimum yayın kapasitesine ulaştı (${maxStreams}/${maxStreams} cihaz aktif).` });
           }
           return;
         }
@@ -728,10 +759,10 @@ class SignalingServer {
     }
 
     receiver.activeSenders.set(senderSocket.id, senderInfo);
-    receiver.inUse = receiver.activeSenders.size >= (receiver.maxSenders || MAX_SENDERS);
+    receiver.inUse = receiver.activeSenders.size >= this.effectiveMax(receiver);
     this.activePairs.set(senderSocket.id, receiver.socketId);
 
-    console.log(`[HomakCast] Pairing successful! Sender ${senderSocket.id} (${senderInfo.deviceName}) paired with Receiver ${receiver.socketId} (Active: ${receiver.activeSenders.size}/${MAX_SENDERS})`);
+    console.log(`[HomakCast] Pairing successful! Sender ${senderSocket.id} (${senderInfo.deviceName}) paired with Receiver ${receiver.socketId} (Active: ${receiver.activeSenders.size}/${this.effectiveMax(receiver)})`);
 
     const iceServers = [
       ...this.settings.stunServers,
@@ -770,7 +801,7 @@ class SignalingServer {
       const receiver = pin ? this.receiversByPin.get(pin) : null;
       if (receiver && receiver.activeSenders) {
         receiver.activeSenders.delete(senderId);
-        receiver.inUse = receiver.activeSenders.size >= (receiver.maxSenders || MAX_SENDERS);
+        receiver.inUse = receiver.activeSenders.size >= this.effectiveMax(receiver);
       }
 
       this.io.to(senderId).emit('stream-terminated', { reason });

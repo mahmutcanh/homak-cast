@@ -15,6 +15,7 @@
 
     <!-- Cleartext is needed only for a LAN receiver address (http://192.168.x.x:5240); the cloud server is https. -->
     <application
+        android:name=".CastApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
