@@ -18,7 +18,8 @@ It speaks the same Socket.IO signaling protocol as the web sender (`server/publi
 Code-only flow: with the default (cloud) server the app first probes the phone's Wi-Fi subnet (`LanDiscovery`:
 `GET /api/status` on port 5240, then `POST /api/verify-code` on each Homak Cast server found) and connects to the
 receiver that owns the PIN; several receivers on one network work. If none matches, the cloud server is used.
-QR / a typed address (under "Gelişmiş ayarlar") skips the search. LAN addresses are not remembered between launches.
+If no domain is set (settings button, top right) only the local network is used; with a domain, local is tried first and the
+domain (cloud) second. QR / a typed address (under "Gelişmiş ayarlar") skips the search. LAN addresses are not remembered.
 
 Server addresses: the cloud server is HTTPS. For a LAN receiver the QR contains the HTTPS address for browsers plus
 `hp=<http port>`; the app uses the plain HTTP port, so no certificate trust is needed (cleartext is enabled for that reason).

@@ -7,7 +7,6 @@ import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -31,7 +30,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private val prefs by lazy { getSharedPreferences("cast", Context.MODE_PRIVATE) }
 
-    private var pendingServer: String = PairingLinks.DEFAULT_SERVER
+    private var pendingServer: String = ""
     private var pendingPin: String = ""
     private var pendingAudio: Boolean = false
 
@@ -66,7 +65,6 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        binding.serverInput.setText(prefs.getString(KEY_SERVER, PairingLinks.DEFAULT_SERVER))
         if (prefs.getInt(KEY_FPS, 30) >= 60) binding.fps60.isChecked = true else binding.fps30.isChecked = true
         if (SystemAudioCapture.isSupported) {
             binding.audioSwitch.isChecked = prefs.getBoolean(KEY_AUDIO, true)
@@ -77,7 +75,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Default flow = type the code, press start. Server/QR/audio/fps live under "advanced".
-        setAdvancedVisible(binding.serverInput.text?.toString() != PairingLinks.DEFAULT_SERVER)
+        setAdvancedVisible(false)
+        binding.settingsButton.setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
         binding.advancedToggle.setOnClickListener {
             setAdvancedVisible(binding.advancedGroup.visibility != View.VISIBLE)
         }
@@ -133,39 +132,48 @@ class MainActivity : AppCompatActivity() {
             return
         }
         binding.pinLayout.error = null
-        val server = PairingLinks.normalizeServerUrl(binding.serverInput.text?.toString().orEmpty())
-        if (server == null) {
+        // Advanced override (QR / typed address). Empty = automatic: local network first, then the settings domain.
+        val typed = binding.serverInput.text?.toString().orEmpty().trim()
+        val explicitServer = if (typed.isEmpty()) null else PairingLinks.normalizeServerUrl(typed)
+        if (typed.isNotEmpty() && explicitServer == null) {
             binding.serverLayout.error = getString(R.string.err_server)
             return
         }
         binding.serverLayout.error = null
 
         pendingPin = pin
-        pendingServer = server
         pendingAudio = binding.audioSwitch.isChecked && SystemAudioCapture.isSupported
-        // LAN addresses are not remembered: the next code may belong to another receiver.
-        val rememberedServer = if (PairingLinks.isPrivateHost(Uri.parse(server).host.orEmpty())) PairingLinks.DEFAULT_SERVER else server
         prefs.edit()
-            .putString(KEY_SERVER, rememberedServer)
             .putInt(KEY_FPS, selectedFps())
             .putBoolean(KEY_AUDIO, pendingAudio)
             .apply()
 
-        if (server == PairingLinks.DEFAULT_SERVER) {
-            findLanReceiverThenContinue(pin)
-        } else {
+        if (explicitServer != null) {
+            pendingServer = explicitServer
             requestPermissionsAndStart()
+        } else {
+            resolveAutomatically(pin)
         }
     }
 
+    /** Domain saved in settings (normalized base URL) or null when none is configured. */
+    private fun configuredDomain(): String? =
+        PairingLinks.normalizeServerUrl(prefs.getString(KEY_DOMAIN, "").orEmpty())
+
     /**
-     * Default setup: the user only types the code. Look for a receiver on the Wi-Fi network that owns it; when none
-     * does (other network, cloud-mode receiver) the default cloud server is used as before.
+     * No domain configured -> local network only. Domain configured -> local network first, the domain (cloud) when
+     * no local receiver owns the code, so both paths work from the same code.
      */
-    private fun findLanReceiverThenContinue(pin: String) {
+    private fun resolveAutomatically(pin: String) {
+        val domain = configuredDomain()
         val local = localIpv4()
         if (local == null) {
-            requestPermissionsAndStart()
+            if (domain == null) {
+                toast(getString(R.string.err_no_receiver))
+            } else {
+                pendingServer = domain
+                requestPermissionsAndStart()
+            }
             return
         }
         binding.startButton.isEnabled = false
@@ -177,8 +185,13 @@ class MainActivity : AppCompatActivity() {
                 if (isDestroyed || isFinishing) return@runOnUiThread
                 binding.startButton.isEnabled = true
                 binding.statusText.text = getString(R.string.status_idle)
-                if (found != null) pendingServer = found
-                requestPermissionsAndStart()
+                val server = found ?: domain
+                if (server == null) {
+                    toast(getString(R.string.err_no_receiver))
+                } else {
+                    pendingServer = server
+                    requestPermissionsAndStart()
+                }
             }
         }.apply { isDaemon = true }.start()
     }
@@ -254,7 +267,7 @@ class MainActivity : AppCompatActivity() {
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
 
     private companion object {
-        const val KEY_SERVER = "server"
+        const val KEY_DOMAIN = "domain"
         const val KEY_FPS = "fps"
         const val KEY_AUDIO = "audio"
     }

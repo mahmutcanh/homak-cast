@@ -4,7 +4,14 @@
     <string name="headline">Telefon ekranını yansıt</string>
     <string name="subtitle">Alıcı ekrandaki 6 haneli kodu girin veya QR kodu okutun.</string>
     <string name="hint_pin">Eşleştirme kodu</string>
-    <string name="hint_server">Sunucu adresi</string>
+    <string name="hint_server">Sunucu adresi (boş bırak = otomatik)</string>
+    <string name="settings_title">Ayarlar</string>
+    <string name="hint_domain">Domain (isteğe bağlı)</string>
+    <string name="domain_help">Boş bırakırsan yalnızca yerel ağdaki alıcıya bağlanılır. Domain girersen önce yerel ağ aranır, bulunamazsa bu domain (cloud) kullanılır.</string>
+    <string name="save">Kaydet</string>
+    <string name="domain_saved">Kaydedildi</string>
+    <string name="err_domain">Geçersiz domain.</string>
+    <string name="err_no_receiver">Yerel ağda bu kodlu alıcı bulunamadı. Aynı Wi-Fi\'de olduğundan emin ol ya da Ayarlar\'dan domain ekle.</string>
     <string name="scan_qr">QR kod okut</string>
     <string name="status_searching">Alıcı aranıyor…</string>
     <string name="advanced_show">Gelişmiş ayarlar</string>

@@ -11,6 +11,16 @@
         android:orientation="vertical"
         android:padding="24dp">
 
+        <ImageButton
+            android:id="@+id/settingsButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="end"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/settings_title"
+            android:src="@android:drawable/ic_menu_preferences"
+            android:tint="@color/muted" />
+
         <ImageView
             android:layout_width="220dp"
             android:layout_height="72dp"
