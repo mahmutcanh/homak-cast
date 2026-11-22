@@ -6,6 +6,9 @@
     <string name="hint_pin">Eşleştirme kodu</string>
     <string name="hint_server">Sunucu adresi</string>
     <string name="scan_qr">QR kod okut</string>
+    <string name="status_searching">Alıcı aranıyor…</string>
+    <string name="advanced_show">Gelişmiş ayarlar</string>
+    <string name="advanced_hide">Gelişmiş ayarları gizle</string>
     <string name="scan_prompt">Alıcı ekrandaki QR kodu kameraya gösterin</string>
     <string name="scan_ok">Kod alındı. Yayını başlatabilirsiniz.</string>
     <string name="quality">Görüntü akıcılığı</string>

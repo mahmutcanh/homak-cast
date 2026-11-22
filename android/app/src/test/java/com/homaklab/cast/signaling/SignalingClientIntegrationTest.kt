@@ -139,6 +139,20 @@ class SignalingClientIntegrationTest {
         client.close()
     }
 
+    @Test
+    fun lan_discovery_finds_the_receiver_that_owns_the_pin() {
+        val pin = awaitReceiverLine("PIN=").removePrefix("PIN=")
+        // 127.0.0.2 does not answer; 127.0.0.1 runs the real server.
+        val hosts = listOf("127.0.0.2", "127.0.0.1")
+        assertEquals(serverUrl, LanDiscovery.find(hosts, port, pin))
+    }
+
+    @Test
+    fun lan_discovery_returns_null_for_an_unknown_pin() {
+        awaitReceiverLine("PIN=")
+        assertEquals(null, LanDiscovery.find(listOf("127.0.0.1"), port, "000000"))
+    }
+
     @Volatile
     private var configRef: PairingConfig? = null
 

@@ -5,6 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -12,11 +15,13 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import java.net.Inet4Address
 import com.homaklab.cast.audio.SystemAudioCapture
 import com.homaklab.cast.cast.CastService
 import com.homaklab.cast.cast.CastState
 import com.homaklab.cast.cast.CastStatus
 import com.homaklab.cast.databinding.ActivityMainBinding
+import com.homaklab.cast.signaling.LanDiscovery
 import com.homaklab.cast.signaling.PairingLinks
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
@@ -71,6 +76,11 @@ class MainActivity : AppCompatActivity() {
             binding.audioHint.text = getString(R.string.audio_unsupported)
         }
 
+        // Default flow = type the code, press start. Server/QR/audio/fps live under "advanced".
+        setAdvancedVisible(binding.serverInput.text?.toString() != PairingLinks.DEFAULT_SERVER)
+        binding.advancedToggle.setOnClickListener {
+            setAdvancedVisible(binding.advancedGroup.visibility != View.VISIBLE)
+        }
         binding.scanButton.setOnClickListener {
             scanLauncher.launch(
                 ScanOptions()
@@ -98,7 +108,14 @@ class MainActivity : AppCompatActivity() {
         super.onStop()
     }
 
+    private fun setAdvancedVisible(visible: Boolean) {
+        binding.advancedGroup.visibility = if (visible) View.VISIBLE else View.GONE
+        binding.advancedToggle.text = getString(if (visible) R.string.advanced_hide else R.string.advanced_show)
+    }
+
     private fun applyScannedText(text: String) {
+        // A scanned/opened link may carry a LAN server address; show it so the user sees where it will connect.
+        if (PairingLinks.parse(text)?.serverUrl != null) setAdvancedVisible(true)
         val link = PairingLinks.parse(text)
         if (link == null) {
             toast(getString(R.string.err_bad_qr))
@@ -126,12 +143,59 @@ class MainActivity : AppCompatActivity() {
         pendingPin = pin
         pendingServer = server
         pendingAudio = binding.audioSwitch.isChecked && SystemAudioCapture.isSupported
+        // LAN addresses are not remembered: the next code may belong to another receiver.
+        val rememberedServer = if (PairingLinks.isPrivateHost(Uri.parse(server).host.orEmpty())) PairingLinks.DEFAULT_SERVER else server
         prefs.edit()
-            .putString(KEY_SERVER, server)
+            .putString(KEY_SERVER, rememberedServer)
             .putInt(KEY_FPS, selectedFps())
             .putBoolean(KEY_AUDIO, pendingAudio)
             .apply()
 
+        if (server == PairingLinks.DEFAULT_SERVER) {
+            findLanReceiverThenContinue(pin)
+        } else {
+            requestPermissionsAndStart()
+        }
+    }
+
+    /**
+     * Default setup: the user only types the code. Look for a receiver on the Wi-Fi network that owns it; when none
+     * does (other network, cloud-mode receiver) the default cloud server is used as before.
+     */
+    private fun findLanReceiverThenContinue(pin: String) {
+        val local = localIpv4()
+        if (local == null) {
+            requestPermissionsAndStart()
+            return
+        }
+        binding.startButton.isEnabled = false
+        binding.statusText.text = getString(R.string.status_searching)
+        Thread {
+            val hosts = LanDiscovery.hostsInSubnet(local.first, local.second)
+            val found = LanDiscovery.find(hosts, LanDiscovery.DEFAULT_PORT, pin)
+            runOnUiThread {
+                if (isDestroyed || isFinishing) return@runOnUiThread
+                binding.startButton.isEnabled = true
+                binding.statusText.text = getString(R.string.status_idle)
+                if (found != null) pendingServer = found
+                requestPermissionsAndStart()
+            }
+        }.apply { isDaemon = true }.start()
+    }
+
+    /** The phone's Wi-Fi/Ethernet IPv4 address and prefix length, or null (mobile data only, no network). */
+    private fun localIpv4(): Pair<String, Int>? {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = cm.activeNetwork ?: return null
+        val caps = cm.getNetworkCapabilities(network) ?: return null
+        if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) && !caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) return null
+        val address = cm.getLinkProperties(network)?.linkAddresses
+            ?.firstOrNull { it.address is Inet4Address && !it.address.isLoopbackAddress } ?: return null
+        val ip = address.address.hostAddress ?: return null
+        return ip to address.prefixLength
+    }
+
+    private fun requestPermissionsAndStart() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
