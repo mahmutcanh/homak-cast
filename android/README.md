@@ -15,9 +15,9 @@ It speaks the same Socket.IO signaling protocol as the web sender (`server/publi
    so the microphone is never sent. Stereo Opus, voice processing (AEC/NS/AGC) disabled. Video and audio share ONE
    `MediaProjection` (`ProjectionVideoCapturer`), because Android 14+ allows a projection token to be used only once.
 
-Code-only flow: with the default (cloud) server the app first probes the phone's Wi-Fi subnet (`LanDiscovery`:
-`GET /api/status` on port 5240, then `POST /api/verify-code` on each Homak Cast server found) and connects to the
-receiver that owns the PIN; several receivers on one network work. If none matches, the cloud server is used.
+Code-only flow: the app first probes the phone's Wi-Fi subnet (`LanDiscovery`: `GET /api/status` on port 5240, then
+`POST /api/verify-code` on each Homak Cast server found) and connects to the receiver that owns the PIN; several
+receivers on one network work.
 If no domain is set (settings button, top right) only the local network is used; with a domain, local is tried first and the
 domain (cloud) second. QR / a typed address (under "Gelişmiş ayarlar") skips the search. LAN addresses are not remembered.
 
