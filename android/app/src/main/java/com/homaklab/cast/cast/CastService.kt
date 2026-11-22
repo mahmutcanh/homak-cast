@@ -12,6 +12,7 @@ import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import com.homaklab.cast.Branding
 import com.homaklab.cast.MainActivity
 import com.homaklab.cast.R
 import com.homaklab.cast.audio.SystemAudioCapture
@@ -67,6 +68,7 @@ class CastService : Service(), CastSession.Events {
             return
         }
 
+        val company = Branding.normalize(getSharedPreferences("cast", MODE_PRIVATE).getString("company", null))
         session = CastSession(
             context = this,
             projection = projection,
@@ -74,8 +76,8 @@ class CastService : Service(), CastSession.Events {
             serverUrl = server,
             pin = pin,
             requestedFps = intent.getIntExtra(EXTRA_FPS, 30),
-            deviceName = "${Build.MANUFACTURER} ${Build.MODEL}".trim(),
-            model = Build.MODEL,
+            deviceName = Branding.deviceLabel(company, "${Build.MANUFACTURER} ${Build.MODEL}"),
+            model = Branding.deviceLabel(company, Build.MODEL),
             events = this
         ).also { it.start() }
     }

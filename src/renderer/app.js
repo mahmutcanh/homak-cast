@@ -83,6 +83,10 @@
   const brandBadge = document.getElementById('brandBadge');
   const brandLogo = document.getElementById('brandLogo');
   const brandNameText = document.getElementById('brandNameText');
+  const settingLogoPreview = document.getElementById('settingLogoPreview');
+  const pickLogoBtn = document.getElementById('pickLogoBtn');
+  const clearLogoBtn = document.getElementById('clearLogoBtn');
+  const logoHint = document.getElementById('logoHint');
   const settingPort = document.getElementById('settingPort');
   const settingRequireApproval = document.getElementById('settingRequireApproval');
   const settingAutoStart = document.getElementById('settingAutoStart');
@@ -128,6 +132,7 @@
     initCanvas();
 
     currentSettings = await window.electronAPI.getSettings();
+    customLogo = await window.electronAPI.getLogo();
     applyBranding();
     activeAddressMode = currentSettings.preferredMode === 'cloud' ? 'cloud' : 'lan';
     connectSignaling(signalingUrlFor(activeAddressMode), true);
@@ -1010,6 +1015,9 @@
 
   // --- Company branding (window title, header badge, standby title) ---
   const DEFAULT_COMPANY = 'The Land of Legends';
+  const DEFAULT_LOGO_SRC = 'assets/lol-logo.png';
+  const LOGO_HINT = 'PNG veya JPG, en fazla 5 MB. Seçilmezse varsayılan logo kullanılır.';
+  let customLogo = null; // data URL of the logo chosen in settings, or null for the bundled one
 
   function companyNameOf(settings) {
     const name = String((settings && settings.companyName) || '').trim();
@@ -1021,12 +1029,36 @@
     const isDefault = name.toLowerCase() === DEFAULT_COMPANY.toLowerCase();
     document.title = name + ' — Cast Receiver';
     if (brandBadge) brandBadge.textContent = name.toUpperCase();
-    // The bundled logo is the default company's; other companies get their name as the heading instead.
-    if (brandLogo) brandLogo.style.display = isDefault ? '' : 'none';
+    // A chosen logo always wins. The bundled logo belongs to the default company, so other companies without
+    // a logo get their name as the heading; with a logo, a non-default name is shown under it.
+    if (brandLogo) {
+      brandLogo.src = customLogo || DEFAULT_LOGO_SRC;
+      brandLogo.style.display = customLogo || isDefault ? '' : 'none';
+    }
     if (brandNameText) {
       brandNameText.textContent = name;
       brandNameText.style.display = isDefault ? 'none' : '';
     }
+    if (settingLogoPreview) settingLogoPreview.src = customLogo || DEFAULT_LOGO_SRC;
+    if (clearLogoBtn) clearLogoBtn.disabled = !customLogo;
+  }
+
+  async function pickLogo() {
+    const result = await window.electronAPI.pickLogo();
+    if (result && result.dataUrl) {
+      customLogo = result.dataUrl;
+      logoHint.textContent = LOGO_HINT;
+      applyBranding();
+    } else if (result && result.error) {
+      logoHint.textContent = result.error;
+    }
+  }
+
+  async function clearLogo() {
+    await window.electronAPI.clearLogo();
+    customLogo = null;
+    logoHint.textContent = LOGO_HINT;
+    applyBranding();
   }
 
   // --- Settings Modal Logic ---
@@ -1199,6 +1231,8 @@
     openSettingsBtn.addEventListener('click', openSettings);
     closeSettingsModalBtn.addEventListener('click', closeSettings);
     saveSettingsBtn.addEventListener('click', saveSettings);
+    if (pickLogoBtn) pickLogoBtn.addEventListener('click', pickLogo);
+    if (clearLogoBtn) clearLogoBtn.addEventListener('click', clearLogo);
 
     // Listeners from Electron Main Process / System Tray
     window.electronAPI.onOpenSettingsModal(() => openSettings());

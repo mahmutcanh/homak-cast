@@ -905,6 +905,22 @@ body.theme-lol .tab-btn.active {
   margin-bottom: 12px;
 }
 
+.logo-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-preview {
+  max-height: 48px;
+  max-width: 160px;
+  object-fit: contain;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 4px;
+}
+
 .lol-brand-name {
   font-size: 40px;
   font-weight: 900;

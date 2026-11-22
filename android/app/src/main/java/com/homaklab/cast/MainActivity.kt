@@ -106,7 +106,11 @@ class MainActivity : AppCompatActivity() {
     private fun applyBranding() {
         val name = Branding.normalize(prefs.getString(KEY_COMPANY, null))
         val isDefault = Branding.isDefault(name)
-        binding.brandLogo.visibility = if (isDefault) View.VISIBLE else View.GONE
+        // A picked logo always wins. The bundled logo belongs to the default company, so other companies without
+        // a logo get their name as the heading; with a logo, a non-default name is shown under it.
+        val custom = LogoStore.load(this)
+        if (custom != null) binding.brandLogo.setImageBitmap(custom) else binding.brandLogo.setImageResource(R.drawable.lol_logo)
+        binding.brandLogo.visibility = if (custom != null || isDefault) View.VISIBLE else View.GONE
         binding.brandName.visibility = if (isDefault) View.GONE else View.VISIBLE
         binding.brandName.text = name
         title = "$name Cast"

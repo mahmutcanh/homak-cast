@@ -3,6 +3,7 @@ package com.homaklab.cast
 import android.content.Context
 import android.os.Bundle
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.homaklab.cast.databinding.ActivitySettingsBinding
 import com.homaklab.cast.signaling.PairingLinks
@@ -13,6 +14,12 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySettingsBinding
     private val prefs by lazy { getSharedPreferences("cast", Context.MODE_PRIVATE) }
 
+    private val logoPicker = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            if (LogoStore.save(this, uri)) refreshLogo() else Toast.makeText(this, getString(R.string.err_logo), Toast.LENGTH_LONG).show()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivitySettingsBinding.inflate(layoutInflater)
@@ -20,6 +27,19 @@ class SettingsActivity : AppCompatActivity() {
         binding.companyInput.setText(Branding.normalize(prefs.getString(KEY_COMPANY, null)))
         binding.domainInput.setText(prefs.getString(KEY_DOMAIN, "").orEmpty())
         binding.saveButton.setOnClickListener { save() }
+        binding.logoPickButton.setOnClickListener { logoPicker.launch("image/*") }
+        binding.logoClearButton.setOnClickListener {
+            LogoStore.clear(this)
+            refreshLogo()
+        }
+        refreshLogo()
+    }
+
+    /** The logo applies as soon as it is picked or removed; Save only covers the text fields. */
+    private fun refreshLogo() {
+        val logo = LogoStore.load(this)
+        if (logo != null) binding.logoPreview.setImageBitmap(logo) else binding.logoPreview.setImageResource(R.drawable.lol_logo)
+        binding.logoClearButton.isEnabled = logo != null
     }
 
     private fun save() {

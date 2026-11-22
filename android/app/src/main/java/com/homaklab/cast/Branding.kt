@@ -18,5 +18,17 @@ object Branding {
         return text.ifEmpty { DEFAULT_COMPANY }
     }
 
+    /**
+     * "Company · Device" as shown on the receiver (the server keeps at most [max] characters). The company is
+     * shortened first so the device name always survives.
+     */
+    fun deviceLabel(company: String, device: String, max: Int = 80): String {
+        val name = device.trim()
+        val separator = " · "
+        val room = max - name.length - separator.length
+        if (room < 3) return name.take(max)
+        return company.take(room).trimEnd() + separator + name
+    }
+
     fun isDefault(name: String): Boolean = name.equals(DEFAULT_COMPANY, ignoreCase = true)
 }

@@ -1,8 +1,8 @@
-const { app, BrowserWindow, Tray, Menu, screen, ipcMain, nativeImage, session, desktopCapturer, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, screen, ipcMain, nativeImage, session, desktopCapturer, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const SignalingServer = require('./server/signaling-server');
-const { loadSettings, saveSettings, getNetworkAddresses, normalizeCompanyName } = require('./server/config');
+const { loadSettings, saveSettings, getNetworkAddresses, normalizeCompanyName, APPDATA_DIR } = require('./server/config');
 
 let mainWindow = null;
 let tray = null;
@@ -313,6 +313,63 @@ ipcMain.handle('save-settings', (event, newSettings) => {
     if (tray) tray.setToolTip(trayTooltip());
   }
   return settings;
+});
+
+// --- Company logo (chosen in settings, stored as a small PNG next to the settings file) ---
+const LOGO_PATH = path.join(APPDATA_DIR, 'logo.png');
+const LOGO_MAX_FILE_BYTES = 5 * 1024 * 1024;
+const LOGO_MAX_HEIGHT = 256;
+const LOGO_MAX_WIDTH = 800;
+
+function readLogoDataUrl() {
+  try {
+    if (fs.existsSync(LOGO_PATH)) {
+      return 'data:image/png;base64,' + fs.readFileSync(LOGO_PATH).toString('base64');
+    }
+  } catch (err) {
+    console.error('Failed to read logo:', err);
+  }
+  return null;
+}
+
+ipcMain.handle('get-logo', () => readLogoDataUrl());
+
+ipcMain.handle('pick-logo', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Logo seç',
+    properties: ['openFile'],
+    filters: [{ name: 'Resim', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'] }]
+  });
+  if (result.canceled || !result.filePaths.length) return { canceled: true };
+  const file = result.filePaths[0];
+  try {
+    if (fs.statSync(file).size > LOGO_MAX_FILE_BYTES) return { error: 'Logo en fazla 5 MB olabilir.' };
+    let image = nativeImage.createFromPath(file);
+    if (image.isEmpty()) return { error: 'Resim okunamadı.' };
+    const { width, height } = image.getSize();
+    if (height > LOGO_MAX_HEIGHT || width > LOGO_MAX_WIDTH) {
+      const scale = Math.min(LOGO_MAX_HEIGHT / height, LOGO_MAX_WIDTH / width);
+      image = image.resize({
+        width: Math.max(1, Math.round(width * scale)),
+        height: Math.max(1, Math.round(height * scale)),
+        quality: 'best'
+      });
+    }
+    fs.writeFileSync(LOGO_PATH, image.toPNG());
+    return { dataUrl: readLogoDataUrl() };
+  } catch (err) {
+    console.error('Failed to save logo:', err);
+    return { error: 'Logo kaydedilemedi.' };
+  }
+});
+
+ipcMain.handle('clear-logo', () => {
+  try {
+    if (fs.existsSync(LOGO_PATH)) fs.unlinkSync(LOGO_PATH);
+  } catch (err) {
+    console.error('Failed to remove logo:', err);
+  }
+  return true;
 });
 
 ipcMain.handle('get-network-addresses', () => {
