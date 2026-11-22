@@ -124,36 +124,60 @@
     initCanvas();
 
     currentSettings = await window.electronAPI.getSettings();
-    const port = currentSettings.port || 5240;
-    const localFallbackUrl = `http://localhost:${port}`;
-    const serverUrl = currentSettings.signalingServerUrl || 'https://cast.homaklab.com';
+    connectSignaling(signalingUrlFor('cloud'), true);
 
-    console.log(`[Receiver] Connecting to signaling server: ${serverUrl}`);
-    socket = io(serverUrl, { timeout: 5000, reconnectionAttempts: 3 });
-
-    let connected = false;
-    socket.on('connect', () => {
-      connected = true;
-      console.log(`[Receiver] Connected to signaling server: ${serverUrl}`);
-      registerWithServer();
-    });
-
-    socket.on('connect_error', (err) => {
-      console.warn(`[Receiver] Failed to connect to ${serverUrl}:`, err.message);
-      if (!connected && serverUrl !== localFallbackUrl) {
-        console.log(`[Receiver] Falling back to local embedded server: ${localFallbackUrl}`);
-        socket.disconnect();
-        socket = io(localFallbackUrl);
-        setupSocketEvents();
-      }
-    });
-
-    setupSocketEvents();
     setupDisplays();
     setupAudioDevices();
     setupDesktopSenderSources();
     setupLanAddressInfo();
     setupUIEvents();
+  }
+
+  function signalingUrlFor(mode) {
+    if (mode === 'lan') return `http://localhost:${currentSettings.port || 5240}`;
+    return currentSettings.signalingServerUrl || 'https://cast.homaklab.com';
+  }
+
+  // (Re)connect to a signaling server. The PIN is issued by the server we register with, so the
+  // QR/PIN shown must always match the server the phone will reach (cloud vs. this PC's LAN server).
+  function connectSignaling(url, allowLocalFallback) {
+    if (socket) {
+      socket.removeAllListeners();
+      socket.disconnect();
+    }
+    const s = io(url, { timeout: 5000, reconnectionAttempts: 3 });
+    socket = s;
+    let connected = false;
+    console.log(`[Receiver] Connecting to signaling server: ${url}`);
+
+    s.on('connect', () => {
+      connected = true;
+      console.log(`[Receiver] Connected to signaling server: ${url}`);
+      registerWithServer();
+    });
+
+    s.on('connect_error', (err) => {
+      console.warn(`[Receiver] Failed to connect to ${url}:`, err.message);
+      const localUrl = signalingUrlFor('lan');
+      if (!connected && allowLocalFallback && socket === s && url !== localUrl) {
+        console.log(`[Receiver] Falling back to local embedded server: ${localUrl}`);
+        activeAddressMode = 'lan';
+        connectSignaling(localUrl, false);
+      }
+    });
+
+    setupSocketEvents();
+  }
+
+  function switchAddressMode(mode) {
+    if (mode === activeAddressMode) return;
+    if (activePeers.size > 0) {
+      notify('Yayın sürerken bağlantı modu değiştirilemez.');
+      return;
+    }
+    activeAddressMode = mode;
+    currentPin = '';
+    connectSignaling(signalingUrlFor(mode), false);
   }
 
   function initCanvas() {
@@ -436,8 +460,6 @@
     const formattedPin = pin.slice(0, 3) + ' ' + pin.slice(3);
     pinCode.textContent = formattedPin;
     if (watermarkPinText) watermarkPinText.textContent = `PIN: ${formattedPin}`;
-    cloudBaseUrl = 'https://cast.homaklab.com';
-    activeAddressMode = 'cloud';
     refreshActiveAddressUI();
   }
 
@@ -1022,17 +1044,11 @@
 
     // Mode toggle between Cloud and LAN
     if (btnModeCloud) {
-      btnModeCloud.addEventListener('click', () => {
-        activeAddressMode = 'cloud';
-        refreshActiveAddressUI();
-      });
+      btnModeCloud.addEventListener('click', () => switchAddressMode('cloud'));
     }
 
     if (btnModeLan) {
-      btnModeLan.addEventListener('click', () => {
-        activeAddressMode = 'lan';
-        refreshActiveAddressUI();
-      });
+      btnModeLan.addEventListener('click', () => switchAddressMode('lan'));
     }
     // Mode tabs
     tabReceiverMode.addEventListener('click', () => {
