@@ -22,12 +22,25 @@
             android:tint="@color/muted" />
 
         <ImageView
+            android:id="@+id/brandLogo"
             android:layout_width="220dp"
             android:layout_height="72dp"
             android:layout_marginTop="16dp"
             android:contentDescription="@string/app_name"
             android:scaleType="fitCenter"
             android:src="@drawable/lol_logo" />
+
+        <TextView
+            android:id="@+id/brandName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center"
+            android:textAllCaps="true"
+            android:textColor="@color/on_surface"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
 
         <TextView
             android:layout_width="wrap_content"

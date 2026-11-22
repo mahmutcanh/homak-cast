@@ -6,6 +6,8 @@
     <string name="hint_pin">Eşleştirme kodu</string>
     <string name="hint_server">Sunucu adresi (boş bırak = otomatik)</string>
     <string name="settings_title">Ayarlar</string>
+    <string name="hint_company">Şirket adı</string>
+    <string name="company_help">Ana ekranda logonun yerine bu ad gösterilir. Boş bırakırsan The Land of Legends kullanılır.</string>
     <string name="hint_domain">Domain (isteğe bağlı)</string>
     <string name="domain_help">Boş bırakırsan yalnızca yerel ağdaki alıcıya bağlanılır. Domain girersen önce yerel ağ aranır, bulunamazsa bu domain (cloud) kullanılır.</string>
     <string name="save">Kaydet</string>

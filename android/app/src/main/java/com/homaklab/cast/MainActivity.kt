@@ -97,6 +97,21 @@ class MainActivity : AppCompatActivity() {
         intent?.data?.toString()?.let(::applyScannedText) // homak links opened from a browser/QR app
     }
 
+    override fun onResume() {
+        super.onResume()
+        applyBranding() // the name may have just been changed in settings
+    }
+
+    /** Default company keeps the bundled logo; any other company shows its name as the heading instead. */
+    private fun applyBranding() {
+        val name = Branding.normalize(prefs.getString(KEY_COMPANY, null))
+        val isDefault = Branding.isDefault(name)
+        binding.brandLogo.visibility = if (isDefault) View.VISIBLE else View.GONE
+        binding.brandName.visibility = if (isDefault) View.GONE else View.VISIBLE
+        binding.brandName.text = name
+        title = "$name Cast"
+    }
+
     override fun onStart() {
         super.onStart()
         CastState.observe(::render)
@@ -268,6 +283,7 @@ class MainActivity : AppCompatActivity() {
 
     private companion object {
         const val KEY_DOMAIN = "domain"
+        const val KEY_COMPANY = "company"
         const val KEY_FPS = "fps"
         const val KEY_AUDIO = "audio"
     }
