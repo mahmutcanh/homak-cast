@@ -61,6 +61,7 @@
     "files": [
       "**/*",
       "!dist/*",
+      "!android/**",
       "!.git/*",
       "!test/*",
       "!server/public/downloads/*",

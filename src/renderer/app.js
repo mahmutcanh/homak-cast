@@ -260,7 +260,9 @@
     }
     targetBaseUrl = targetBaseUrl.replace(/\/+$/, '');
     const cleanHost = getCleanHost(targetBaseUrl);
-    activeConnectUrl = `${targetBaseUrl}/?code=${currentPin}`;
+    // LAN: the QR is an https URL for browsers; "hp" tells the Android app which plain-HTTP port to use.
+    const httpPortHint = activeAddressMode === 'lan' ? `&hp=${currentSettings.port || 5240}` : '';
+    activeConnectUrl = `${targetBaseUrl}/?code=${currentPin}${httpPortHint}`;
 
     if (stepDomainText) stepDomainText.textContent = cleanHost;
     if (connectUrlText) connectUrlText.textContent = activeConnectUrl;

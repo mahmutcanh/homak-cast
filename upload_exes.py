@@ -25,6 +25,11 @@ print('Uploading portable exe (95MB)...', flush=True)
 sftp.put(local_portable, f'{remote_dir}/Homak-Cast-Receiver.exe')
 sftp.put(local_portable, f'{remote_dir}/The-Land-of-Legends-Cast-Receiver.exe')
 
+local_apk = os.path.join('android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
+if os.path.exists(local_apk):
+    print('Uploading Android APK...', flush=True)
+    sftp.put(local_apk, f'{remote_dir}/Homak-Cast.apk')
+
 sftp.close()
 ssh.close()
 print('All download EXEs uploaded to cast.homaklab.com successfully!', flush=True)
