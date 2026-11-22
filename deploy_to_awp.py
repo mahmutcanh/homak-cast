@@ -1,3 +1,5 @@
+import sys
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 import paramiko
 import os
 import tarfile
@@ -7,7 +9,8 @@ import json
 import time
 
 HOSTIVON_IP = '109.236.48.166'
-HOSTIVON_PASS = os.environ['HOSTIVON_PASS']  # set in the shell, never commit
+# Key auth by default (~/.ssh/hostivon_key); HOSTIVON_PASS env var is only a fallback. Never commit secrets.
+HOSTIVON_KEY = os.path.expanduser(os.environ.get('HOSTIVON_KEY', '~/.ssh/hostivon_key'))
 REMOTE_DIR = '/opt/cast'
 PORT = 20150
 
@@ -41,7 +44,8 @@ def deploy():
     print("\n--- 2. Connecting to Hostivon SSH ---", flush=True)
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect(HOSTIVON_IP, port=22, username='root', password=HOSTIVON_PASS, timeout=15)
+    auth = {'key_filename': HOSTIVON_KEY} if os.path.exists(HOSTIVON_KEY) else {'password': os.environ['HOSTIVON_PASS']}
+    ssh.connect(HOSTIVON_IP, port=22, username='root', timeout=15, **auth)
     print("SSH connected.", flush=True)
 
     print("\n--- 3. Uploading Files ---", flush=True)
