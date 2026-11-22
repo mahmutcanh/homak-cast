@@ -100,6 +100,51 @@ const connect = (url, opts = {}) => new Promise((res, rej) => {
   const qr2 = JSON.parse((await fetchJson('/api/qr?code=123456&url=' + encodeURIComponent('http://192.168.1.20:5240/?code=123456'))).b);
   check('QR accepts LAN url', qr2.url === 'http://192.168.1.20:5240/?code=123456');
 
+  // Proxy headers only trusted from a loopback peer
+  check('spoofed XFF ignored for non-loopback peer', srv.getClientIp({ 'x-forwarded-for': '1.2.3.4' }, '203.0.113.9') === '203.0.113.9');
+  check('XFF honoured behind loopback proxy', srv.getClientIp({ 'cf-connecting-ip': '198.51.100.7' }, '127.0.0.1') === '198.51.100.7');
+
+  srv.resetRateLimit('127.0.0.1'); // earlier brute-force test blocked loopback
+  // Annotation relay: whitelisted fields only
+  const annSender = await connect(url);
+  const annRecv = await connect(url);
+  const annReg = await emitAck(annRecv, 'register-receiver', { deviceName: 'Ann' });
+  await emitAck(annSender, 'request-pairing', { pin: annReg.pin });
+  let ann = null;
+  annRecv.on('stream-annotation', (d) => { ann = d; });
+  annSender.emit('stream-annotation', { type: 'draw', x0: 5, y0: -2, x1: 0.5, y1: 0.5, color: 'red;evil', size: 9999, extra: 'x' });
+  await wait(150);
+  check('annotation fields clamped/whitelisted', ann && ann.x0 === 1 && ann.y0 === 0 && ann.color === '#ff1744' && ann.size === 32 && !('extra' in ann));
+  ann = null;
+  annSender.emit('stream-annotation', { type: 'bogus' });
+  await wait(100);
+  check('unknown annotation type dropped', ann === null);
+
+  // webrtc-answer with garbage must not throw / crash
+  annRecv.emit('webrtc-answer', null);
+  annRecv.emit('webrtc-answer', 'str');
+  await wait(100);
+  check('server alive after bad webrtc-answer', (await fetchJson('/api/status')).b.includes('"ok":true'));
+
+  // Settings sanitation helper (loopback-only path in server)
+  check('rotatePin keeps device name', (() => {
+    const rec = srv.receiversByPin.get(annReg.pin);
+    const before = rec.deviceName;
+    const rot = srv.rotatePin(annRecv.id, { keepSenders: true });
+    return rot && rot.record.deviceName === before && rot.record.activeSenders.size === rec.activeSenders.size;
+  })());
+
+  // Pending approval is rejected when the receiver disappears
+  const apRecv = await connect(url);
+  const apReg = await emitAck(apRecv, 'register-receiver', { deviceName: 'Ap', requireApproval: true });
+  const apSender = await connect(url);
+  let rejected = false;
+  apSender.on('pairing-rejected', () => { rejected = true; });
+  await emitAck(apSender, 'request-pairing', { pin: apReg.pin });
+  apRecv.disconnect();
+  await wait(200);
+  check('pending approval rejected when receiver drops', rejected);
+
   const failed = results.filter(x => !x[1]);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);
   process.exit(failed.length ? 1 : 0);

@@ -1,4 +1,16 @@
 (() => {
+  // Non-blocking notice (replaces window.alert, which freezes the renderer).
+  function notify(message) {
+    const el = document.createElement('div');
+    el.setAttribute('role', 'alert');
+    el.textContent = String(message);
+    el.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);max-width:90vw;' +
+      'padding:12px 18px;border-radius:10px;background:#111827;color:#fff;font:14px/1.4 sans-serif;' +
+      'box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:99999;white-space:pre-line;';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 5000);
+  }
+
   const socket = io();
 
   // Elements
@@ -235,7 +247,7 @@
 
   // Apply detected device to UI
   if (detectedDeviceBadge) {
-    detectedDeviceBadge.innerHTML = `<span class="device-icon">${clientInfo.icon}</span> ${clientInfo.displayName}`;
+    detectedDeviceBadge.textContent = `${clientInfo.icon} ${clientInfo.displayName}`;
   }
 
   const downloadPortableBtn = document.getElementById('downloadPortableBtn');
@@ -706,7 +718,7 @@
       closeSwitchSourceModal();
     } catch (err) {
       console.error('Failed to replace video track:', err);
-      alert('Kaynak değiştirilemedi: ' + err.message);
+      notify('Kaynak değiştirilemedi: ' + err.message);
     }
   }
 
@@ -734,7 +746,7 @@
         await replaceLiveVideoTrack(track, targetMode);
       } else if (targetMode === 'screen') {
         if (!hasDisplayMediaSupport()) {
-          alert('Mobil tarayıcınız web üzerinden tüm telefon ekranını yakalamayı güvenlik nedeniyle desteklemiyor. Kamera veya Belge modunu kullanabilirsiniz.');
+          notify('Mobil tarayıcınız web üzerinden tüm telefon ekranını yakalamayı güvenlik nedeniyle desteklemiyor. Kamera veya Belge modunu kullanabilirsiniz.');
           return;
         }
         let stream = null;
@@ -756,7 +768,7 @@
       }
     } catch (err) {
       console.error('Source switch error:', err);
-      alert('Kaynak değiştirilemedi: ' + err.message);
+      notify('Kaynak değiştirilemedi: ' + err.message);
     }
   }
 
@@ -826,7 +838,7 @@
         closeSwitchSourceModal();
       } catch (err) {
         console.error('Document file load error:', err);
-        alert('Dosya gösterilemedi: ' + err.message);
+        notify('Dosya gösterilemedi: ' + err.message);
       } finally {
         documentFileInput.value = '';
       }
@@ -836,7 +848,7 @@
   // Audio Toggle
   toggleAudioBtn.addEventListener('click', () => {
     if (!audioTrack) {
-      alert('Bu yayında ses akışı bulunmuyor.');
+      notify('Bu yayında ses akışı bulunmuyor.');
       return;
     }
     isAudioMuted = !isAudioMuted;

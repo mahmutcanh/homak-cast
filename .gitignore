@@ -5,4 +5,5 @@ Thumbs.db
 
 # Built installers are distributed via the server, not git
 server/public/downloads/*.exe
+release/
 __pycache__/

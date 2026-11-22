@@ -1,4 +1,4 @@
-const CACHE_NAME = 'homak-cast-v1';
+const CACHE_NAME = 'homak-cast-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -31,6 +31,13 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  // Never intercept API, socket.io or non-GET traffic: stale cached responses would be wrong.
+  if (event.request.method !== 'GET' || url.origin !== self.location.origin ||
+      url.pathname.startsWith('/api/') || url.pathname.startsWith('/socket.io/') ||
+      url.pathname.startsWith('/download')) {
+    return;
+  }
   // Network first with cache fallback
   event.respondWith(
     fetch(event.request).catch(() => {

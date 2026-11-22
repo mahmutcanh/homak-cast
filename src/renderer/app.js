@@ -1,4 +1,16 @@
 (() => {
+  // Non-blocking notice (replaces window.alert, which freezes the renderer).
+  function notify(message) {
+    const el = document.createElement('div');
+    el.setAttribute('role', 'alert');
+    el.textContent = String(message);
+    el.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);max-width:90vw;' +
+      'padding:12px 18px;border-radius:10px;background:#111827;color:#fff;font:14px/1.4 sans-serif;' +
+      'box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:99999;white-space:pre-line;';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 5000);
+  }
+
   // Navigation & Mode Tabs
   const tabReceiverMode = document.getElementById('tabReceiverMode');
   const tabSenderMode = document.getElementById('tabSenderMode');
@@ -645,7 +657,7 @@
   function startRecording() {
     const firstPeer = Array.from(activePeers.values())[0];
     if (!firstPeer || !firstPeer.stream) {
-      alert('Kayıt başlatılacak aktif yayın akışı bulunamadı.');
+      notify('Kayıt başlatılacak aktif yayın akışı bulunamadı.');
       return;
     }
 
@@ -682,9 +694,9 @@
 
       const res = await window.electronAPI.saveRecording({ buffer: arrayBuffer, filename });
       if (res && res.ok) {
-        alert(`Yayın kaydı başarıyla kaydedildi:\n${res.filePath}`);
+        notify(`Yayın kaydı başarıyla kaydedildi:\n${res.filePath}`);
       } else {
-        alert(`Kayıt kaydedilirken bir hata oluştu: ${res ? res.error : 'Bilinmeyen hata'}`);
+        notify(`Kayıt kaydedilirken bir hata oluştu: ${res ? res.error : 'Bilinmeyen hata'}`);
       }
     };
 

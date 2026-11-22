@@ -1,5 +1,6 @@
-const { app, BrowserWindow, Tray, Menu, screen, ipcMain, nativeImage, session, desktopCapturer } = require('electron');
+const { app, BrowserWindow, Tray, Menu, screen, ipcMain, nativeImage, session, desktopCapturer, shell } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const SignalingServer = require('./server/signaling-server');
 const { loadSettings, saveSettings, getNetworkAddresses } = require('./server/config');
 
@@ -374,7 +375,13 @@ app.whenReady().then(async () => {
   // Configure display media handler for screen casting
   if (session.defaultSession.setDisplayMediaRequestHandler) {
     session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
-      desktopCapturer.getSources({ types: ['screen', 'window'] }).then((sources) => {
+      // Only our own local UI may capture the screen; deny anything else.
+      const frameUrl = request.frame && request.frame.url ? request.frame.url : '';
+      if (!frameUrl.startsWith('file://')) {
+        callback({});
+        return;
+      }
+      desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
         if (sources.length > 0) {
           callback({ video: sources[0], audio: 'loopback' });
         } else {

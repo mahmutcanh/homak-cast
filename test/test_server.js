@@ -94,19 +94,27 @@ async function runTests() {
 
     await Promise.all([receiverConnectedPromise, senderApprovedPromise]);
 
-    // 6. Check PIN invalidation (Code should now be invalid while in use)
-    const intruderSocket = io(serverUrl);
-    await new Promise((resolve) => intruderSocket.on('connect', resolve));
-    await new Promise((resolve) => {
-      intruderSocket.emit('request-pairing', { pin: initialPin }, (res) => {
-        assert.strictEqual(res.ok, false, 'In-use PIN should be rejected');
-        console.log('[PASS] In-use PIN protection verified.');
-        resolve();
+    // 6. Multi-sender capacity: same PIN accepts up to 4 senders, the 5th is rejected
+    const extraSockets = [];
+    const pairExtra = async () => {
+      const sock = io(serverUrl);
+      await new Promise((resolve) => sock.on('connect', resolve));
+      extraSockets.push(sock);
+      return new Promise((resolve) => {
+        sock.emit('request-pairing', { pin: initialPin, deviceName: 'Extra' }, resolve);
       });
-    });
-    intruderSocket.disconnect();
+    };
+    for (let i = 0; i < 3; i++) {
+      const res = await pairExtra();
+      assert.strictEqual(res.ok, true, `Sender ${i + 2}/4 should be accepted`);
+    }
+    const overflow = await pairExtra();
+    assert.strictEqual(overflow.ok, false, 'Fifth sender must be rejected');
+    assert.ok(/4\/4/.test(overflow.error), 'Rejection must mention capacity');
+    console.log('[PASS] Multi-sender capacity (4/4) enforced.');
+    extraSockets.forEach((sock) => sock.disconnect());
 
-    // 7. Stream Termination & New PIN Generation
+    // 7. Receiver stops all streams -> brand new PIN (device name preserved)
     let newPin = null;
     const newPinPromise = new Promise((resolve) => {
       receiverSocket.on('pin-update', ({ pin }) => {
@@ -118,8 +126,10 @@ async function runTests() {
       });
     });
 
-    directSenderSocket.emit('stop-stream');
+    receiverSocket.emit('stop-stream');
     await newPinPromise;
+    assert.strictEqual(server.receiversByPin.get(newPin).deviceName, 'Test Living Room TV',
+      'Receiver device name must survive PIN rotation');
     directSenderSocket.disconnect();
 
     // 8. APPROVAL MODE TEST (when enabled in settings)
