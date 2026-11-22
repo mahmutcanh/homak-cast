@@ -11,6 +11,12 @@
     <string name="quality">Görüntü akıcılığı</string>
     <string name="fps_30">Dengeli 30 FPS</string>
     <string name="fps_60">Akıcı 60 FPS</string>
+    <string name="audio_switch">Telefon sesini de gönder</string>
+    <string name="audio_hint">Müzik, video ve oyun sesi gider. Mikrofon gönderilmez. Bazı uygulamalar sesin yakalanmasına izin vermez. Android 10 veya üstü gerekir.</string>
+    <string name="audio_unsupported">Ses yakalama için Android 10 veya üstü gerekir</string>
+    <string name="audio_on">ses açık</string>
+    <string name="audio_off">ses kapalı</string>
+    <string name="err_audio_denied">Mikrofon izni verilmedi, yayın sessiz başlayacak</string>
     <string name="start_cast">Yayını başlat</string>
     <string name="stop_cast">Yayını durdur</string>
     <string name="action_stop">Durdur</string>
@@ -18,12 +24,12 @@
     <string name="status_idle">Hazır. Ekranınız yalnızca siz onay verdikten sonra paylaşılır.</string>
     <string name="status_connecting">Bağlanılıyor…</string>
     <string name="status_waiting_approval">Alıcıdan yayın onayı bekleniyor…</string>
-    <string name="status_streaming">Yayın sürüyor (%1$s, %2$d FPS)</string>
+    <string name="status_streaming">Yayın sürüyor (%1$s, %2$d FPS, %3$s)</string>
     <string name="status_failed">Yayın başlatılamadı: %1$s</string>
 
     <string name="notif_channel">Yayın durumu</string>
     <string name="notif_connecting">Bağlanılıyor…</string>
-    <string name="notif_streaming">Ekran yayınlanıyor (%1$s, %2$d FPS)</string>
+    <string name="notif_streaming">Ekran yayınlanıyor (%1$s, %2$d FPS, %3$s)</string>
 
     <string name="err_pin">6 haneli kodu girin</string>
     <string name="err_server">Geçerli bir sunucu adresi girin</string>

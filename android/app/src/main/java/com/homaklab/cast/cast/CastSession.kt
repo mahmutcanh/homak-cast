@@ -1,14 +1,15 @@
 package com.homaklab.cast.cast
 
 import android.content.Context
-import android.content.Intent
 import android.hardware.display.DisplayManager
 import android.media.projection.MediaProjection
+import android.media.MediaRecorder
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.DisplayMetrics
 import android.view.WindowManager
+import com.homaklab.cast.audio.SystemAudioCapture
 import com.homaklab.cast.signaling.CandidateInit
 import com.homaklab.cast.signaling.PairingConfig
 import com.homaklab.cast.signaling.SignalingClient
@@ -19,12 +20,14 @@ import org.webrtc.IceCandidate
 import org.webrtc.MediaConstraints
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnectionFactory
+import org.webrtc.AudioSource
+import org.webrtc.AudioTrack
 import org.webrtc.RtpParameters
-import org.webrtc.ScreenCapturerAndroid
 import org.webrtc.SessionDescription
 import org.webrtc.SurfaceTextureHelper
 import org.webrtc.VideoSource
 import org.webrtc.VideoTrack
+import org.webrtc.audio.JavaAudioDeviceModule
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledFuture
@@ -36,7 +39,8 @@ import java.util.concurrent.TimeUnit
  */
 class CastSession(
     context: Context,
-    private val projectionData: Intent,
+    private val projection: MediaProjection,
+    private val captureAudio: Boolean,
     private val serverUrl: String,
     private val pin: String,
     private val requestedFps: Int,
@@ -66,7 +70,12 @@ class CastSession(
     private var eglBase: EglBase? = null
     private var factory: PeerConnectionFactory? = null
     private var peer: PeerConnection? = null
-    private var capturer: ScreenCapturerAndroid? = null
+    private var capturer: ProjectionVideoCapturer? = null
+    private var audioModule: JavaAudioDeviceModule? = null
+    private var systemAudio: SystemAudioCapture? = null
+    private var audioSource: AudioSource? = null
+    private var audioTrack: AudioTrack? = null
+    private var audioActive = false
     private var textureHelper: SurfaceTextureHelper? = null
     private var videoSource: VideoSource? = null
     private var videoTrack: VideoTrack? = null
@@ -160,10 +169,11 @@ class CastSession(
     private fun beginStreaming(config: PairingConfig) {
         ensureWebRtcInitialized(appContext)
         val egl = EglBase.create().also { eglBase = it }
-        val f = PeerConnectionFactory.builder()
+        val factoryBuilder = PeerConnectionFactory.builder()
             .setVideoEncoderFactory(DefaultVideoEncoderFactory(egl.eglBaseContext, true, true))
             .setVideoDecoderFactory(DefaultVideoDecoderFactory(egl.eglBaseContext))
-            .createPeerConnectionFactory()
+        audioActive = setupSystemAudio(factoryBuilder)
+        val f = factoryBuilder.createPeerConnectionFactory()
         factory = f
 
         captureFps = (config.defaultFps ?: requestedFps).coerceAtMost(requestedFps).coerceIn(MIN_FPS, MAX_FPS)
@@ -171,11 +181,9 @@ class CastSession(
 
         val source = f.createVideoSource(true).also { videoSource = it }
         val helper = SurfaceTextureHelper.create("ScreenCaptureThread", egl.eglBaseContext).also { textureHelper = it }
-        val cap = ScreenCapturerAndroid(projectionData, object : MediaProjection.Callback() {
-            override fun onStop() {
-                post { finish("Ekran yakalama durduruldu.", notifyServer = true) }
-            }
-        })
+        val cap = ProjectionVideoCapturer(projection) {
+            post { finish("Ekran yakalama durduruldu.", notifyServer = true) }
+        }
         cap.initialize(helper, appContext, source.capturerObserver)
         cap.startCapture(size.width, size.height, captureFps)
         capturer = cap
@@ -198,12 +206,18 @@ class CastSession(
             ?: throw IllegalStateException("PeerConnection oluşturulamadı")
         peer = pc
         pc.addTrack(track, listOf("homak-cast"))
+        if (audioActive) {
+            val source = f.createAudioSource(rawAudioConstraints()).also { audioSource = it }
+            val aTrack = f.createAudioTrack("homak-audio", source).also { audioTrack = it }
+            pc.addTrack(aTrack, listOf("homak-cast"))
+        }
         createAndSendOffer(pc)
     }
 
     private fun createAndSendOffer(pc: PeerConnection) {
         pc.createOffer(object : SdpAdapter("createOffer") {
-            override fun onCreateSuccess(desc: SessionDescription) {
+            override fun onCreateSuccess(created: SessionDescription) {
+                val desc = SessionDescription(created.type, stereoOpus(created.description))
                 pc.setLocalDescription(object : SdpAdapter("setLocal") {
                     override fun onSetSuccess() {
                         post { if (!finished) signaling.sendOffer(desc.description) }
@@ -245,7 +259,7 @@ class CastSession(
             when (state) {
                 PeerConnection.PeerConnectionState.CONNECTED -> {
                     val size = captureSize
-                    events.onStatus(CastStatus.Streaming("${size?.width}x${size?.height}", captureFps))
+                    events.onStatus(CastStatus.Streaming("${size?.width}x${size?.height}", captureFps, audioActive))
                 }
                 PeerConnection.PeerConnectionState.FAILED ->
                     finish("WebRTC bağlantısı kurulamadı (ağ/güvenlik duvarı engeli olabilir).", notifyServer = true, failed = true)
@@ -260,6 +274,39 @@ class CastSession(
             }
         }
     }
+
+    // ---- system audio ----
+
+    /**
+     * Starts AudioPlaybackCapture and routes it through a custom audio device module. Returns false (video-only
+     * session) when audio is off, unsupported (< Android 10), the permission is missing or capture cannot start.
+     */
+    private fun setupSystemAudio(builder: PeerConnectionFactory.Builder): Boolean {
+        if (!captureAudio || !SystemAudioCapture.isSupported) return false
+        val capture = SystemAudioCapture(projection)
+        if (!capture.start(appContext)) return false
+        systemAudio = capture
+        audioModule = JavaAudioDeviceModule.builder(appContext)
+            .setUseHardwareAcousticEchoCanceler(false)
+            .setUseHardwareNoiseSuppressor(false)
+            .setAudioSource(MediaRecorder.AudioSource.MIC)
+            .setInputSampleRate(SystemAudioCapture.SAMPLE_RATE)
+            .setUseStereoInput(true)
+            .setAudioBufferCallback(capture)
+            .createAudioDeviceModule()
+        builder.setAudioDeviceModule(audioModule)
+        return true
+    }
+
+    /** System audio is music/video, not speech: disable voice processing that would mangle it. */
+    private fun rawAudioConstraints() = MediaConstraints().apply {
+        listOf("googEchoCancellation", "googAutoGainControl", "googNoiseSuppression", "googHighpassFilter")
+            .forEach { mandatory.add(MediaConstraints.KeyValuePair(it, "false")) }
+    }
+
+    /** Same Opus tweak as the web sender: stereo, plus a music-grade bitrate. */
+    private fun stereoOpus(sdp: String): String =
+        OPUS_FMTP.replace(sdp) { "${it.value};stereo=1;sprop-stereo=1;maxaveragebitrate=128000" }
 
     // ---- rotation ----
 
@@ -288,7 +335,7 @@ class CastSession(
                     if (size != captureSize) {
                         captureSize = size
                         capturer?.changeCaptureFormat(size.width, size.height, captureFps)
-                        events.onStatus(CastStatus.Streaming("${size.width}x${size.height}", captureFps))
+                        events.onStatus(CastStatus.Streaming("${size.width}x${size.height}", captureFps, audioActive))
                     }
                 }
             }
@@ -311,10 +358,15 @@ class CastSession(
         runCatching { capturer?.dispose() }
         runCatching { peer?.close() }
         runCatching { peer?.dispose() }
+        runCatching { audioTrack?.dispose() }
+        runCatching { audioSource?.dispose() }
+        runCatching { systemAudio?.stop() }
         runCatching { videoTrack?.dispose() }
         runCatching { videoSource?.dispose() }
         runCatching { textureHelper?.dispose() }
         runCatching { factory?.dispose() }
+        runCatching { audioModule?.release() }
+        runCatching { projection.stop() }
         runCatching { eglBase?.release() }
         signaling.close()
         events.onStatus(
@@ -352,6 +404,7 @@ class CastSession(
         private const val DEFAULT_FPS = 30
         private const val DEFAULT_MAX_KBPS = 8000
         private const val DISCONNECT_GRACE_SECONDS = 8L
+        private val OPUS_FMTP = Regex("a=fmtp:[0-9]+ minptime=10;useinbandfec=1")
 
         @Volatile
         private var webRtcInitialized = false

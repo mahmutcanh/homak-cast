@@ -1,5 +1,6 @@
 package com.homaklab.cast.cast
 
+import android.app.Activity
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,11 +8,13 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.homaklab.cast.MainActivity
 import com.homaklab.cast.R
+import com.homaklab.cast.audio.SystemAudioCapture
 
 /**
  * Foreground service (type mediaProjection) that owns the [CastSession]. Android only allows screen capture
@@ -36,7 +39,10 @@ class CastService : Service(), CastSession.Events {
 
     private fun startCast(intent: Intent) {
         if (session != null) return
-        enterForeground(getString(R.string.notif_connecting))
+        // Audio needs Android 10+ and RECORD_AUDIO; the foreground service must declare the microphone type for it.
+        val captureAudio = intent.getBooleanExtra(EXTRA_AUDIO, false) &&
+            SystemAudioCapture.isSupported && SystemAudioCapture.hasPermission(this)
+        enterForeground(getString(R.string.notif_connecting), captureAudio)
 
         val projectionData = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             intent.getParcelableExtra(EXTRA_PROJECTION_DATA, Intent::class.java)
@@ -52,9 +58,19 @@ class CastService : Service(), CastSession.Events {
             return
         }
 
+        // Must happen after startForeground(); the projection is shared by video and audio capture.
+        val projection = try {
+            getSystemService(MediaProjectionManager::class.java).getMediaProjection(Activity.RESULT_OK, projectionData)
+        } catch (e: SecurityException) {
+            CastState.publish(CastStatus.Failed(getString(R.string.err_projection_denied)))
+            stopSelf()
+            return
+        }
+
         session = CastSession(
             context = this,
-            projectionData = projectionData,
+            projection = projection,
+            captureAudio = captureAudio,
             serverUrl = server,
             pin = pin,
             requestedFps = intent.getIntExtra(EXTRA_FPS, 30),
@@ -67,7 +83,7 @@ class CastService : Service(), CastSession.Events {
     override fun onStatus(status: CastStatus) {
         CastState.publish(status)
         val text = when (status) {
-            is CastStatus.Streaming -> getString(R.string.notif_streaming, status.resolution, status.fps)
+            is CastStatus.Streaming -> getString(R.string.notif_streaming, status.resolution, status.fps, audioLabel(status.audio))
             is CastStatus.WaitingApproval -> getString(R.string.status_waiting_approval)
             else -> getString(R.string.notif_connecting)
         }
@@ -86,10 +102,16 @@ class CastService : Service(), CastSession.Events {
         super.onDestroy()
     }
 
-    private fun enterForeground(text: String) {
+    private fun audioLabel(on: Boolean): String = getString(if (on) R.string.audio_on else R.string.audio_off)
+
+    private fun enterForeground(text: String, withMicrophone: Boolean) {
         val notification = buildNotification(text)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+            var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            if (withMicrophone && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            }
+            startForeground(NOTIFICATION_ID, notification, type)
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
@@ -128,6 +150,7 @@ class CastService : Service(), CastSession.Events {
         const val EXTRA_SERVER = "server"
         const val EXTRA_PIN = "pin"
         const val EXTRA_FPS = "fps"
+        const val EXTRA_AUDIO = "audio"
         private const val CHANNEL_ID = "cast"
         private const val NOTIFICATION_ID = 1
     }

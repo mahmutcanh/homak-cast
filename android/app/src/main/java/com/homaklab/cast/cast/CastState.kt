@@ -8,7 +8,7 @@ sealed class CastStatus {
     object Idle : CastStatus()
     object Connecting : CastStatus()
     object WaitingApproval : CastStatus()
-    data class Streaming(val resolution: String, val fps: Int) : CastStatus()
+    data class Streaming(val resolution: String, val fps: Int, val audio: Boolean) : CastStatus()
     data class Ended(val reason: String) : CastStatus()
     data class Failed(val message: String) : CastStatus()
 }

@@ -12,6 +12,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.homaklab.cast.audio.SystemAudioCapture
 import com.homaklab.cast.cast.CastService
 import com.homaklab.cast.cast.CastState
 import com.homaklab.cast.cast.CastStatus
@@ -27,6 +28,7 @@ class MainActivity : AppCompatActivity() {
 
     private var pendingServer: String = PairingLinks.DEFAULT_SERVER
     private var pendingPin: String = ""
+    private var pendingAudio: Boolean = false
 
     private val scanLauncher = registerForActivityResult(ScanContract()) { result ->
         result.contents?.let(::applyScannedText)
@@ -43,6 +45,14 @@ class MainActivity : AppCompatActivity() {
 
     private val notificationLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         // The cast works without the notification permission; we just continue.
+        proceedAfterNotification()
+    }
+
+    private val audioPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) {
+            pendingAudio = false
+            toast(getString(R.string.err_audio_denied))
+        }
         requestProjection()
     }
 
@@ -53,6 +63,13 @@ class MainActivity : AppCompatActivity() {
 
         binding.serverInput.setText(prefs.getString(KEY_SERVER, PairingLinks.DEFAULT_SERVER))
         if (prefs.getInt(KEY_FPS, 30) >= 60) binding.fps60.isChecked = true else binding.fps30.isChecked = true
+        if (SystemAudioCapture.isSupported) {
+            binding.audioSwitch.isChecked = prefs.getBoolean(KEY_AUDIO, true)
+        } else {
+            binding.audioSwitch.isChecked = false
+            binding.audioSwitch.isEnabled = false
+            binding.audioHint.text = getString(R.string.audio_unsupported)
+        }
 
         binding.scanButton.setOnClickListener {
             scanLauncher.launch(
@@ -108,12 +125,26 @@ class MainActivity : AppCompatActivity() {
 
         pendingPin = pin
         pendingServer = server
-        prefs.edit().putString(KEY_SERVER, server).putInt(KEY_FPS, selectedFps()).apply()
+        pendingAudio = binding.audioSwitch.isChecked && SystemAudioCapture.isSupported
+        prefs.edit()
+            .putString(KEY_SERVER, server)
+            .putInt(KEY_FPS, selectedFps())
+            .putBoolean(KEY_AUDIO, pendingAudio)
+            .apply()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
             notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            proceedAfterNotification()
+        }
+    }
+
+    /** System audio needs RECORD_AUDIO (AudioPlaybackCapture is gated by it); ask only when the user wants audio. */
+    private fun proceedAfterNotification() {
+        if (pendingAudio && !SystemAudioCapture.hasPermission(this)) {
+            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         } else {
             requestProjection()
         }
@@ -131,6 +162,7 @@ class MainActivity : AppCompatActivity() {
             .putExtra(CastService.EXTRA_SERVER, pendingServer)
             .putExtra(CastService.EXTRA_PIN, pendingPin)
             .putExtra(CastService.EXTRA_FPS, selectedFps())
+            .putExtra(CastService.EXTRA_AUDIO, pendingAudio)
         ContextCompat.startForegroundService(this, intent)
         CastState.publish(CastStatus.Connecting)
     }
@@ -146,7 +178,10 @@ class MainActivity : AppCompatActivity() {
             CastStatus.Idle -> getString(R.string.status_idle)
             CastStatus.Connecting -> getString(R.string.status_connecting)
             CastStatus.WaitingApproval -> getString(R.string.status_waiting_approval)
-            is CastStatus.Streaming -> getString(R.string.status_streaming, status.resolution, status.fps)
+            is CastStatus.Streaming -> getString(
+                R.string.status_streaming, status.resolution, status.fps,
+                getString(if (status.audio) R.string.audio_on else R.string.audio_off)
+            )
             is CastStatus.Ended -> status.reason
             is CastStatus.Failed -> getString(R.string.status_failed, status.message)
         }
@@ -157,5 +192,6 @@ class MainActivity : AppCompatActivity() {
     private companion object {
         const val KEY_SERVER = "server"
         const val KEY_FPS = "fps"
+        const val KEY_AUDIO = "audio"
     }
 }
