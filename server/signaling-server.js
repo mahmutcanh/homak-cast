@@ -8,6 +8,7 @@ const { loadSettings, saveSettings, getNetworkAddresses } = require('./config');
 const crypto = require('crypto');
 const { buildTurnServers } = require('./turn');
 const { loadOrCreateCert } = require('./tls');
+const { createDualListener } = require('./dual-protocol');
 const { licenseStatus } = require('./license');
 
 const RATE_MAX_FAILS = 5;
@@ -98,6 +99,7 @@ class SignalingServer {
     this.port = options.port || process.env.PORT || loadSettings().port || 5240;
     this.httpsPort = options.httpsPort || process.env.HTTPS_PORT || null;
     this.httpsServer = null;
+    this.dualListeners = [];
     this.publicHost = options.publicHost || process.env.PUBLIC_HOST || 'cast.homaklab.com';
     this.app = express();
     this.server = http.createServer(this.app);
@@ -843,42 +845,57 @@ class SignalingServer {
     }
   }
 
-  async startHttps(host) {
+  // Builds the TLS server without listening: connections arrive through the dual-protocol listeners.
+  async initHttps() {
     if (!this.httpsPort) return;
     try {
       const { key, cert } = await loadOrCreateCert();
       const httpsServer = https.createServer({ key, cert }, this.app);
       this.io.attach(httpsServer);
-      await new Promise((resolve, reject) => {
-        httpsServer.once('error', reject);
-        httpsServer.listen(this.httpsPort, host, resolve);
-      });
       this.httpsServer = httpsServer;
-      console.log(`  HTTPS (self-signed, LAN): port ${this.httpsPort}`);
     } catch (err) {
       // HTTPS is an optional extra: keep the plain HTTP server usable.
-      console.error('[HomakCast] HTTPS listener failed, continuing with HTTP only:', err.message);
+      console.error('[HomakCast] HTTPS setup failed, continuing with HTTP only:', err.message);
       this.httpsServer = null;
     }
   }
 
-  start() {
+  listenOn(srv, port, host) {
     return new Promise((resolve, reject) => {
-      // BIND_HOST=127.0.0.1 on the public server so only the reverse proxy/tunnel can reach it.
-      const host = process.env.BIND_HOST || '0.0.0.0';
-      this.server.once('error', reject);
-      this.server.listen(this.port, host, async () => {
-        console.log(`
-======================================================`);
-        console.log(`  HOMAK CAST SIGNALING & WEB SENDER SERVER STARTED`);
-        console.log(`  Domain: https://${this.publicHost}`);
-        console.log(`  Local Port: ${this.port}`);
-        await this.startHttps(host);
-        console.log(`======================================================
-`);
-        resolve(this.port);
+      srv.once('error', reject);
+      srv.listen(port, host, () => {
+        srv.removeListener('error', reject);
+        resolve();
       });
     });
+  }
+
+  async start() {
+    // BIND_HOST=127.0.0.1 on the public server so only the reverse proxy/tunnel can reach it.
+    const host = process.env.BIND_HOST || '0.0.0.0';
+    await this.initHttps();
+
+    if (this.httpsServer) {
+      // LAN mode: both ports answer http:// and https:// so the address works whichever scheme is typed.
+      const ports = new Set([Number(this.port), Number(this.httpsPort)]);
+      for (const port of ports) {
+        const listener = createDualListener(this.server, this.httpsServer);
+        this.dualListeners.push(listener);
+        await this.listenOn(listener, port, host);
+      }
+    } else {
+      await this.listenOn(this.server, this.port, host);
+    }
+
+    console.log(`
+======================================================`);
+    console.log(`  HOMAK CAST SIGNALING & WEB SENDER SERVER STARTED`);
+    console.log(`  Domain: https://${this.publicHost}`);
+    console.log(`  Local Port: ${this.port}`);
+    if (this.httpsServer) console.log(`  HTTPS (self-signed, LAN): port ${this.httpsPort} (http + https on both ports)`);
+    console.log(`======================================================
+`);
+    return this.port;
   }
 
   stop() {
@@ -888,6 +905,8 @@ class SignalingServer {
     });
     return new Promise((resolve) => {
       this.io.close(async () => {
+        await Promise.all(this.dualListeners.map(closeServer));
+        this.dualListeners = [];
         await closeServer(this.server);
         await closeServer(this.httpsServer);
         resolve();
