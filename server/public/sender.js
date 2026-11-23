@@ -1,4 +1,11 @@
 (() => {
+  // Camera/screen capture only exists in a secure context. Opened over plain http on the LAN,
+  // navigator.mediaDevices is undefined, so move to the https listener (same host and port).
+  if (!window.isSecureContext && location.protocol === 'http:' && !/^(localhost|127\.)/.test(location.hostname)) {
+    location.replace('https://' + location.host + location.pathname + location.search + location.hash);
+    return;
+  }
+
   // Non-blocking notice (replaces window.alert, which freezes the renderer).
   function notify(message) {
     const el = document.createElement('div');
@@ -80,6 +87,8 @@
   let iceServersConfig = [{ urls: 'stun:stun.l.google.com:19302' }];
   let deferredPwaPrompt = null;
   let currentSourceMode = 'screen';
+  let captureLost = false;
+  let wakeLock = null;
   let documentCanvasInterval = null;
 
   // Register PWA Service Worker
@@ -547,6 +556,22 @@
     socket.emit('stop-stream');
   });
 
+  function isCameraMode(mode) {
+    return mode === 'camera-back' || mode === 'camera-front';
+  }
+
+  // Camera frames follow the phone's orientation: ask for portrait dimensions when the phone is held
+  // upright and landscape ones when it is turned, otherwise the picture arrives sideways/cropped.
+  function cameraVideoConstraints(facing, fps) {
+    const portrait = window.innerHeight > window.innerWidth;
+    return {
+      facingMode: facing,
+      width: portrait ? { ideal: 1080, max: 2160 } : { ideal: 1920, max: 3840 },
+      height: portrait ? { ideal: 1920, max: 3840 } : { ideal: 1080, max: 2160 },
+      frameRate: { ideal: fps }
+    };
+  }
+
   // Start Screen or Camera Sharing
   async function startScreenShare(serverConfig = {}) {
     const targetFps = parseInt(fpsSelect.value, 10) || 60;
@@ -558,16 +583,15 @@
     }
 
     try {
+      if (!navigator.mediaDevices) {
+        throw new Error('Kamera ve ekran erişimi için güvenli bağlantı (https) gerekir. Adresi https:// ile açın ve sertifika uyarısında devam edin.');
+      }
       if (selectedSource === 'camera-back' || selectedSource === 'camera-front') {
         // Camera / Document Presenter Mode (fully supported on all mobile & desktop browsers)
         const facing = selectedSource === 'camera-back' ? { ideal: 'environment' } : 'user';
+        currentSourceMode = selectedSource;
         localStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: facing,
-            width: { ideal: 1920, max: 3840 },
-            height: { ideal: 1080, max: 2160 },
-            frameRate: { ideal: targetFps }
-          },
+          video: cameraVideoConstraints(facing, targetFps),
           audio: includeAudio
         });
       } else {
@@ -613,6 +637,12 @@
 
       // When user clicks the native "Stop Sharing" button
       videoTrack.onended = () => {
+        // Mobile browsers kill the camera when the tab goes to the background. That is not a user stop:
+        // keep the session and re-acquire the camera when the tab comes back (see visibilitychange below).
+        if (isCameraMode(currentSourceMode) && document.hidden) {
+          captureLost = true;
+          return;
+        }
         handleStreamEnd('Yayın durduruldu.');
         socket.emit('stop-stream');
       };
@@ -661,6 +691,8 @@
 
       // Send offer to receiver via signaling
       socket.emit('webrtc-offer', { sdp });
+
+      requestWakeLock();
 
       // Update UI to streaming mode
       pairingSection.style.display = 'none';
@@ -777,12 +809,7 @@
       if (targetMode === 'camera-back' || targetMode === 'camera-front') {
         const facing = targetMode === 'camera-back' ? { ideal: 'environment' } : 'user';
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: facing,
-            width: { ideal: 1920, max: 3840 },
-            height: { ideal: 1080, max: 2160 },
-            frameRate: { ideal: targetFps }
-          },
+          video: cameraVideoConstraints(facing, targetFps),
           audio: false
         });
         const track = stream.getVideoTracks()[0];
@@ -917,7 +944,68 @@
     }
   }
 
+  // Navigating this tab away (Chrome Home button, typing another URL, closing it) destroys the page that
+  // holds the capture, so the stream cannot survive it. Ask before leaving while a stream is live.
+  window.addEventListener('beforeunload', (e) => {
+    if (!peerConnection) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
+
+  async function requestWakeLock() {
+    try {
+      if ('wakeLock' in navigator && !wakeLock && document.visibilityState === 'visible') {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+      }
+    } catch (e) {
+      console.warn('Wake lock unavailable:', e);
+    }
+  }
+
+  async function reacquireCamera() {
+    const facing = currentSourceMode === 'camera-back' ? { ideal: 'environment' } : 'user';
+    const fps = parseInt(fpsSelect.value, 10) || 60;
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: cameraVideoConstraints(facing, fps),
+      audio: false
+    });
+    await replaceLiveVideoTrack(stream.getVideoTracks()[0], currentSourceMode);
+    captureLost = false;
+  }
+
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible' || !peerConnection) return;
+    await requestWakeLock();
+    if (isCameraMode(currentSourceMode) && (captureLost || !videoTrack || videoTrack.readyState === 'ended')) {
+      try {
+        await reacquireCamera();
+      } catch (err) {
+        console.error('Camera could not be resumed:', err);
+        handleStreamEnd('Kamera arka plandan sonra yeniden açılamadı.');
+        socket.emit('stop-stream');
+      }
+    }
+  });
+
+  // Phone turned: re-request the camera with matching dimensions so the receiver switches orientation too.
+  function onOrientationChange() {
+    if (!peerConnection || !videoTrack || !isCameraMode(currentSourceMode) || videoTrack.readyState !== 'live') return;
+    const fps = parseInt(fpsSelect.value, 10) || 60;
+    const c = cameraVideoConstraints(undefined, fps);
+    videoTrack.applyConstraints({ width: c.width, height: c.height, frameRate: c.frameRate }).then(() => {
+      const s = videoTrack.getSettings();
+      statRes.textContent = `${s.width}x${s.height}`;
+    }).catch((err) => console.warn('Orientation constraints failed:', err));
+  }
+  window.addEventListener('orientationchange', () => setTimeout(onOrientationChange, 300));
+  if (screen.orientation && screen.orientation.addEventListener) {
+    screen.orientation.addEventListener('change', () => setTimeout(onOrientationChange, 300));
+  }
+
   function handleStreamEnd(msg) {
+    captureLost = false;
+    if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
     stopMediaTracks();
 
     if (peerConnection) {

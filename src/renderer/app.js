@@ -302,8 +302,6 @@
     if (connectUrlText) connectUrlText.textContent = '';
     if (watermarkDomainText) watermarkDomainText.textContent = '';
     if (bottomCloudDomainText) bottomCloudDomainText.textContent = '';
-    if (lanIpText && lanBaseUrl) lanIpText.textContent = lanBaseUrl;
-
     if (btnModeCloud && btnModeLan) {
       if (activeAddressMode === 'lan') {
         btnModeLan.classList.add('active');
@@ -329,31 +327,53 @@
       .catch(err => console.warn('QR error:', err));
   }
 
+  let lastLanSignature = '';
+
   async function setupLanAddressInfo() {
     try {
       const addresses = await window.electronAPI.getNetworkAddresses();
       const port = currentSettings.port || 5240;
-      // Prefer real LAN IP (192.168.x.x or 10.x.x) over container/virtual adapters
-      const lan = addresses.find(a => a.isLocal && a.address.startsWith('192.168.')) ||
-                  addresses.find(a => a.isLocal && !a.address.startsWith('172.') && !a.address.startsWith('10.77.')) ||
-                  addresses.find(a => a.isLocal) || addresses[0];
-      if (lan) {
-        // Prefer the HTTPS listener: phones only allow screen capture in a secure context.
-        let httpsPort = null;
-        try {
-          const status = await fetch(`http://localhost:${port}/api/status`).then(r => r.json());
-          httpsPort = status && status.httpsPort;
-        } catch (e) {
-          console.warn('Could not read local server status:', e);
-        }
-        lanBaseUrl = httpsPort ? `https://${lan.address}:${httpsPort}` : `http://${lan.address}:${port}`;
-        if (lanIpText) lanIpText.textContent = lanBaseUrl;
-        refreshActiveAddressUI();
+      // Every real network card (Ethernet + Wi-Fi, ...) gets its own address; VM/VPN adapters are skipped.
+      let lanList = addresses.filter(a => a.isLan);
+      if (!lanList.length) lanList = addresses.filter(a => a.isLocal);
+      if (!lanList.length) lanList = addresses.slice(0, 1);
+      if (!lanList.length) return;
+
+      // Prefer the HTTPS listener: phones only allow screen capture in a secure context.
+      let httpsPort = null;
+      let webPorts = [];
+      try {
+        const status = await fetch(`http://localhost:${port}/api/status`).then(r => r.json());
+        httpsPort = status && status.httpsPort;
+        webPorts = (status && status.webPorts) || [];
+      } catch (e) {
+        console.warn('Could not read local server status:', e);
       }
+
+      const urlFor = (ip) => {
+        if (webPorts.includes(443)) return `https://${ip}`;
+        if (httpsPort) return `https://${ip}:${httpsPort}`;
+        if (webPorts.includes(80)) return `http://${ip}`;
+        return `http://${ip}:${port}`;
+      };
+      const urls = lanList.map(a => urlFor(a.address));
+      const signature = urls.join('|');
+      if (signature === lastLanSignature) return; // network unchanged: leave QR and text alone
+      lastLanSignature = signature;
+
+      lanBaseUrl = urls[0];
+      if (lanIpText) {
+        lanIpText.style.whiteSpace = 'pre-line';
+        lanIpText.textContent = urls.join('\n');
+      }
+      refreshActiveAddressUI();
     } catch (e) {
       console.warn('Could not get network addresses:', e);
     }
   }
+
+  // Wi-Fi / Ethernet can be plugged or unplugged at any time: re-read the addresses regularly.
+  setInterval(setupLanAddressInfo, 5000);
 
   function registerWithServer() {
     if (!socket) return;

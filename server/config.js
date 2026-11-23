@@ -80,6 +80,8 @@ function saveSettings(newSettings) {
   }
 }
 
+const VIRTUAL_INTERFACE_PATTERN = /vethernet|vmware|virtualbox|vbox|hyper-v|docker|wsl|tailscale|zerotier|loopback|bluetooth|veth|^br-|lxd|virbr|vpn|tap-|tun/i;
+
 function getNetworkAddresses() {
   const interfaces = os.networkInterfaces();
   const addresses = [];
@@ -88,17 +90,21 @@ function getNetworkAddresses() {
     for (const iface of interfaces[name]) {
       // Skip internal/loopback and non-IPv4
       if (iface.family === 'IPv4' && !iface.internal) {
+        const isLocal = iface.address.startsWith('192.168.') || iface.address.startsWith('10.') || iface.address.startsWith('172.');
         addresses.push({
           interface: name,
           address: iface.address,
-          isLocal: iface.address.startsWith('192.168.') || iface.address.startsWith('10.') || iface.address.startsWith('172.')
+          isLocal,
+          // isLan = a real network card (Ethernet / Wi-Fi) on a private range, not a VM/VPN/container adapter
+          isLan: isLocal && !VIRTUAL_INTERFACE_PATTERN.test(name)
         });
       }
     }
   }
 
-  // Sort preferred: local LAN first, then others
-  addresses.sort((a, b) => (b.isLocal ? 1 : 0) - (a.isLocal ? 1 : 0));
+  // Sort preferred: real LAN cards first, then other private addresses, then the rest
+  const rank = (a) => (a.isLan ? 2 : a.isLocal ? 1 : 0);
+  addresses.sort((a, b) => rank(b) - rank(a));
   return addresses;
 }
 

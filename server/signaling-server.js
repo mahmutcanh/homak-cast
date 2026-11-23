@@ -7,7 +7,7 @@ const QRCode = require('qrcode');
 const { loadSettings, saveSettings, getNetworkAddresses } = require('./config');
 const crypto = require('crypto');
 const { buildTurnServers } = require('./turn');
-const { loadOrCreateCert } = require('./tls');
+const { loadOrCreateCert, currentIps } = require('./tls');
 const { createDualListener } = require('./dual-protocol');
 const { licenseStatus } = require('./license');
 
@@ -100,6 +100,11 @@ class SignalingServer {
     this.httpsPort = options.httpsPort || process.env.HTTPS_PORT || null;
     this.httpsServer = null;
     this.dualListeners = [];
+    // LAN mode also tries 80/443 so the receiver address needs no port; skipped silently if taken.
+    this.extraPorts = options.extraPorts || [80, 443];
+    this.extraListening = [];
+    this.certIps = [];
+    this.certTimer = null;
     this.publicHost = options.publicHost || process.env.PUBLIC_HOST || 'cast.homaklab.com';
     this.app = express();
     this.server = http.createServer(this.app);
@@ -257,9 +262,7 @@ class SignalingServer {
 
   getPrimaryLanAddress() {
     const addresses = getNetworkAddresses();
-    const lan = addresses.find(a => a.isLocal && a.address.startsWith('192.168.')) ||
-                addresses.find(a => a.isLocal && !a.address.startsWith('172.') && !a.address.startsWith('10.77.')) ||
-                addresses.find(a => a.isLocal) || addresses[0];
+    const lan = addresses.find(a => a.isLan) || addresses.find(a => a.isLocal) || addresses[0];
     return lan ? lan.address : '127.0.0.1';
   }
 
@@ -373,6 +376,8 @@ class SignalingServer {
         domain: this.publicHost,
         port: this.port,
         httpsPort: this.httpsServer ? Number(this.httpsPort) : null,
+        // Standard web ports that were free on this PC (http:// and https:// both work on each)
+        webPorts: [...this.extraListening],
         addresses,
         receiverOnline: this.receiversByPin.size > 0,
         totalReceivers: this.receiversByPin.size,
@@ -850,6 +855,7 @@ class SignalingServer {
     if (!this.httpsPort) return;
     try {
       const { key, cert } = await loadOrCreateCert();
+      this.certIps = currentIps();
       const httpsServer = https.createServer({ key, cert }, this.app);
       this.io.attach(httpsServer);
       this.httpsServer = httpsServer;
@@ -870,6 +876,38 @@ class SignalingServer {
     });
   }
 
+  async listenExtraPorts(host, taken) {
+    for (const port of this.extraPorts) {
+      if (taken.has(port)) continue;
+      const listener = createDualListener(this.server, this.httpsServer);
+      try {
+        await this.listenOn(listener, port, host);
+        this.dualListeners.push(listener);
+        this.extraListening.push(port);
+      } catch (err) {
+        console.warn(`[HomakCast] Port ${port} unavailable (${err.code || err.message}), skipping.`);
+      }
+    }
+  }
+
+  // The certificate lists the PC's IPs. When a network card or Wi-Fi/Ethernet changes, issue a new one
+  // and swap it in without restarting, so https keeps matching the address shown on screen.
+  watchNetworkChanges() {
+    this.certTimer = setInterval(async () => {
+      try {
+        const ips = currentIps();
+        if (ips.every((ip) => this.certIps.includes(ip))) return;
+        const { key, cert } = await loadOrCreateCert();
+        this.httpsServer.setSecureContext({ key, cert });
+        this.certIps = ips;
+        console.log('[HomakCast] Network changed, TLS certificate refreshed:', ips.join(', '));
+      } catch (err) {
+        console.error('[HomakCast] Certificate refresh failed:', err.message);
+      }
+    }, 10000);
+    this.certTimer.unref();
+  }
+
   async start() {
     // BIND_HOST=127.0.0.1 on the public server so only the reverse proxy/tunnel can reach it.
     const host = process.env.BIND_HOST || '0.0.0.0';
@@ -883,6 +921,8 @@ class SignalingServer {
         this.dualListeners.push(listener);
         await this.listenOn(listener, port, host);
       }
+      await this.listenExtraPorts(host, ports);
+      this.watchNetworkChanges();
     } else {
       await this.listenOn(this.server, this.port, host);
     }
@@ -903,6 +943,8 @@ class SignalingServer {
       if (!srv || !srv.listening) return resolve();
       srv.close(() => resolve());
     });
+    if (this.certTimer) clearInterval(this.certTimer);
+    this.extraListening = [];
     return new Promise((resolve) => {
       this.io.close(async () => {
         await Promise.all(this.dualListeners.map(closeServer));
