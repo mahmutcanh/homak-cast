@@ -65,6 +65,15 @@
   // State
   let peerConnection = null;
   let localStream = null;
+  // Screen capture must start inside a user gesture (browsers reject
+  // getDisplayMedia from socket callbacks), so it is taken on "Connect" click.
+  let preparedStream = null;
+  function discardPreparedStream() {
+    if (preparedStream) {
+      preparedStream.getTracks().forEach((t) => t.stop());
+      preparedStream = null;
+    }
+  }
   let audioTrack = null;
   let videoTrack = null;
   let isAudioMuted = false;
@@ -369,6 +378,7 @@
     approvalSection.style.display = 'none';
     pairingSection.style.display = 'block';
     showError(reason || 'Yayın isteği reddedildi.');
+    discardPreparedStream();
     stopMediaTracks();
   });
 
@@ -465,7 +475,7 @@
   }
 
   // Connect Button Click
-  connectBtn.addEventListener('click', () => {
+  connectBtn.addEventListener('click', async () => {
     const pin = pinInput.value.trim().replace(/\s+/g, '');
     if (!pin || pin.length !== 6) {
       showError('Lütfen 6 haneli geçerli eşleştirme kodunu girin.');
@@ -484,6 +494,24 @@
     }
 
     hideError();
+    discardPreparedStream();
+
+    // Screen mode: ask for the capture NOW, while the click gesture is valid.
+    if (selectedSource === 'screen' && hasDisplayMediaSupport()) {
+      try {
+        const opts = {
+          video: { frameRate: { ideal: parseInt(fpsSelect.value, 10) || 60, max: 60 } },
+          audio: audioToggle.checked
+        };
+        preparedStream = navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function'
+          ? await navigator.mediaDevices.getDisplayMedia(opts)
+          : await navigator.getDisplayMedia(opts);
+      } catch (err) {
+        showError('Ekran paylaşımı başlatılamadı: ' + err.message);
+        return;
+      }
+    }
+
     pinInfo.style.display = 'block';
     pinInfo.textContent = 'Bağlanıyor...';
 
@@ -497,6 +525,7 @@
       sourceType: selectedSource
     }, (res) => {
       if (!res.ok) {
+        discardPreparedStream();
         showError(res.error);
         pinInfo.style.display = 'none';
         return;
@@ -512,6 +541,7 @@
   });
 
   cancelApprovalBtn.addEventListener('click', () => {
+    discardPreparedStream();
     approvalSection.style.display = 'none';
     pairingSection.style.display = 'block';
     socket.emit('stop-stream');
@@ -559,7 +589,11 @@
           audio: includeAudio ? true : false
         };
 
-        if (navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function') {
+        if (preparedStream) {
+          // Already captured inside the click gesture (see connectBtn handler).
+          localStream = preparedStream;
+          preparedStream = null;
+        } else if (navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function') {
           localStream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
         } else if (typeof navigator.getDisplayMedia === 'function') {
           localStream = await navigator.getDisplayMedia(displayMediaOptions);
