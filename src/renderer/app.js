@@ -297,10 +297,11 @@
     const httpPortHint = activeAddressMode === 'lan' ? `&hp=${currentSettings.port || 5240}` : '';
     activeConnectUrl = `${targetBaseUrl}/?code=${currentPin}${httpPortHint}`;
 
-    if (stepDomainText) stepDomainText.textContent = cleanHost;
-    if (connectUrlText) connectUrlText.textContent = activeConnectUrl;
-    if (watermarkDomainText) watermarkDomainText.textContent = cleanHost;
-    if (bottomCloudDomainText) bottomCloudDomainText.textContent = 'cast.homaklab.com';
+    // Cloud domain is intentionally not shown on screen; the LAN address stays visible.
+    if (stepDomainText) stepDomainText.textContent = '';
+    if (connectUrlText) connectUrlText.textContent = '';
+    if (watermarkDomainText) watermarkDomainText.textContent = '';
+    if (bottomCloudDomainText) bottomCloudDomainText.textContent = '';
     if (lanIpText && lanBaseUrl) lanIpText.textContent = lanBaseUrl;
 
     if (btnModeCloud && btnModeLan) {
@@ -1037,7 +1038,7 @@
   }
 
   // --- Company branding (window title, header badge, standby title) ---
-  const DEFAULT_COMPANY = 'The Land of Legends';
+  const DEFAULT_COMPANY = 'Cast';
   const DEFAULT_LOGO_SRC = 'assets/lol-logo.png';
   const LOGO_HINT = 'PNG veya JPG, en fazla 5 MB. Seçilmezse varsayılan logo kullanılır.';
   let customLogo = null; // data URL of the logo chosen in settings, or null for the bundled one
@@ -1056,7 +1057,7 @@
     // a logo get their name as the heading; with a logo, a non-default name is shown under it.
     if (brandLogo) {
       brandLogo.src = customLogo || DEFAULT_LOGO_SRC;
-      brandLogo.style.display = customLogo || isDefault ? '' : 'none';
+      brandLogo.style.display = customLogo ? '' : 'none';
     }
     if (brandNameText) {
       brandNameText.textContent = name;
@@ -1194,8 +1195,10 @@
   function openSettings() {
     settingCompanyName.value = companyNameOf(currentSettings);
     refreshBrandingLock();
-    settingSignalingUrl.value = currentSettings.signalingServerUrl || '';
-    settingDeviceName.value = currentSettings.deviceName || 'The Land of Legends Receiver';
+    // The built-in default relay is not shown; only a user-entered custom address appears here.
+    const savedRelay = currentSettings.signalingServerUrl || '';
+    settingSignalingUrl.value = /^https?:\/\/cast\.homaklab\.com\/?$/i.test(savedRelay) ? '' : savedRelay;
+    settingDeviceName.value = currentSettings.deviceName || 'Cast Receiver';
     settingPort.value = currentSettings.port || 5240;
     settingRequireApproval.checked = !!currentSettings.requireApproval;
     settingAutoStart.checked = !!currentSettings.autoStartOnBoot;

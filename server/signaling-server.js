@@ -436,7 +436,7 @@ class SignalingServer {
     // Direct download endpoint for Windows Receiver Portable EXE
     this.app.get(['/download', '/download/portable', '/Homak-Cast-Receiver.exe'], (req, res) => {
       const exePath = path.join(__dirname, 'public', 'downloads', 'Homak-Cast-Receiver.exe');
-      res.download(exePath, 'Homak-Cast-Receiver.exe', (err) => {
+      res.download(exePath, 'Cast-Receiver.exe', (err) => {
         if (err && !res.headersSent) {
           res.status(404).send('İndirme dosyası hazırlanıyor veya bulunamadı.');
         }
@@ -446,7 +446,7 @@ class SignalingServer {
     // Windows Receiver Setup / Installer EXE
     this.app.get(['/download/setup', '/download/installer', '/Homak-Cast-Setup.exe'], (req, res) => {
       const exePath = path.join(__dirname, 'public', 'downloads', 'Homak-Cast-Setup.exe');
-      res.download(exePath, 'Homak-Cast-Setup.exe', (err) => {
+      res.download(exePath, 'Cast-Setup.exe', (err) => {
         if (err && !res.headersSent) {
           res.status(404).send('Kurulum paketi hazırlanıyor veya bulunamadı.');
         }
@@ -456,7 +456,7 @@ class SignalingServer {
     // Android APK download endpoint
     this.app.get(['/download/android', '/download/apk', '/Homak-Cast.apk'], (req, res) => {
       const apkPath = path.join(__dirname, 'public', 'downloads', 'Homak-Cast.apk');
-      res.download(apkPath, 'Homak-Cast.apk', (err) => {
+      res.download(apkPath, 'Cast.apk', (err) => {
         if (err && !res.headersSent) {
           res.status(404).send('Android APK paketi bulunamadı.');
         }

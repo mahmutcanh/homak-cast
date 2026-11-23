@@ -17,7 +17,7 @@ if (!fs.existsSync(APPDATA_DIR)) {
 const SETTINGS_FILE = path.join(APPDATA_DIR, 'settings.json');
 const { defaultLicense, normalizeLicense } = require('./license');
 
-const DEFAULT_COMPANY_NAME = 'The Land of Legends';
+const DEFAULT_COMPANY_NAME = 'Cast';
 
 /** Trimmed, single-line, max 60 chars; falls back to the default brand when empty. */
 function normalizeCompanyName(value) {
@@ -33,8 +33,8 @@ const defaultConfig = {
   companyName: DEFAULT_COMPANY_NAME, // shown in window title, tray and UI header (set in receiver settings)
   port: 5240,
   httpsPort: 5241, // LAN HTTPS (self-signed) so phones get a secure context for screen capture
-  signalingServerUrl: 'https://cast.homaklab.com',
-  deviceName: 'The Land of Legends Receiver',
+  signalingServerUrl: '', // empty = built-in default relay
+  deviceName: 'Cast Receiver',
   preferredMode: 'lan', // 'lan' = this PC is the server (default), 'cloud' = cast.homaklab.com
   requireApproval: false, // Default: no approval needed (connects immediately), can be enabled in settings
   showHeaderInFullscreen: false, // Default: clean immersive fullscreen video without header

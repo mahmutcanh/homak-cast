@@ -260,12 +260,12 @@
     if (clientInfo.downloadType === 'apk') {
       downloadCardLink.href = '/download/android';
       downloadCardLink.innerHTML = `<span>📱</span> Android (.apk)`;
-      downloadCardLink.setAttribute('download', 'Homak-Cast.apk');
+      downloadCardLink.setAttribute('download', 'Cast.apk');
       if (downloadPortableBtn) downloadPortableBtn.style.display = 'none';
     } else if (clientInfo.downloadType === 'exe') {
       downloadCardLink.href = '/download/setup';
       downloadCardLink.innerHTML = `<span>💾</span> Alıcı Kurulum (.exe)`;
-      downloadCardLink.setAttribute('download', 'Homak-Cast-Setup.exe');
+      downloadCardLink.setAttribute('download', 'Cast-Setup.exe');
       if (downloadPortableBtn) {
         downloadPortableBtn.style.display = 'inline-flex';
         downloadPortableBtn.href = '/download';
@@ -452,6 +452,15 @@
       btnSourceScreen.classList.remove('active');
       if (streamSourceSelect) streamSourceSelect.value = 'camera-back';
       currentSourceMode = 'camera-back';
+    });
+  }
+
+  // Form submit (Enter key) must never reload the page; route to connect.
+  const pinFormEl = document.getElementById('pinForm');
+  if (pinFormEl) {
+    pinFormEl.addEventListener('submit', (e) => {
+      e.preventDefault();
+      connectBtn.click();
     });
   }
 

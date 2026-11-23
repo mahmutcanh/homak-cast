@@ -1,7 +1,7 @@
 {
   "name": "homak-cast",
   "version": "1.0.0",
-  "description": "Homak Cast - Windows Kablosuz Ekran ve Projeksiyon Alıcısı (Receiver)",
+  "description": "Windows Kablosuz Ekran Alıcısı",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -22,7 +22,7 @@
     "miracast",
     "homak"
   ],
-  "author": "Homak Lab",
+  "author": "Cast",
   "license": "MIT",
   "dependencies": {
     "express": "^5.3.0",
@@ -37,7 +37,8 @@
   },
   "build": {
     "appId": "com.homaklab.cast",
-    "productName": "The Land of Legends Cast Receiver",
+    "productName": "Cast Receiver",
+    "copyright": "",
     "directories": {
       "output": "dist"
     },
@@ -48,13 +49,17 @@
       ],
       "icon": "src/renderer/assets/icon.ico"
     },
+    "portable": {
+      "artifactName": "Cast-Receiver-${version}.${ext}"
+    },
     "nsis": {
+      "artifactName": "Cast-Setup-${version}.${ext}",
       "oneClick": false,
       "perMachine": true,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "The Land of Legends Cast Receiver",
+      "shortcutName": "Cast Receiver",
       "runAfterFinish": true,
       "include": "build/installer.nsh"
     },

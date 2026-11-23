@@ -12,18 +12,16 @@ ssh.connect(HOSTIVON_IP, port=22, username='root', timeout=15, **auth)
 sftp = ssh.open_sftp()
 
 remote_dir = '/opt/cast/server/public/downloads'
-ssh.exec_command(f'mkdir -p {remote_dir}')
+ssh.exec_command(f'mkdir -p {remote_dir} && rm -f {remote_dir}/The-Land-of-Legends-Cast-*.exe')
 
-local_setup = r'dist\The Land of Legends Cast Receiver Setup 1.0.0.exe'
-local_portable = r'dist\The Land of Legends Cast Receiver 1.0.0.exe'
+local_setup = r'dist\Cast-Setup-1.0.0.exe'
+local_portable = r'dist\Cast-Receiver-1.0.0.exe'
 
 print('Uploading setup exe (104MB)...', flush=True)
 sftp.put(local_setup, f'{remote_dir}/Homak-Cast-Setup.exe')
-sftp.put(local_setup, f'{remote_dir}/The-Land-of-Legends-Cast-Setup.exe')
 
 print('Uploading portable exe (95MB)...', flush=True)
 sftp.put(local_portable, f'{remote_dir}/Homak-Cast-Receiver.exe')
-sftp.put(local_portable, f'{remote_dir}/The-Land-of-Legends-Cast-Receiver.exe')
 
 local_apk = os.path.join('android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
 if os.path.exists(local_apk):

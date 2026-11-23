@@ -58,6 +58,13 @@ def deploy():
     print("\n--- 4. Extracting Files on Server ---", flush=True)
     run_ssh(ssh, f"cd {REMOTE_DIR} && tar -xzf cast_server.tar.gz && rm -f cast_server.tar.gz")
 
+    print("\n--- 4b. Installing production dependencies ---", flush=True)
+    code, _ = run_ssh(ssh, f"set -o pipefail; cd {REMOTE_DIR} && npm install --omit=dev --no-audit --no-fund 2>&1 | tail -5")
+    if code != 0:
+        print("npm install failed; aborting before restart.", flush=True)
+        ssh.close()
+        return
+
     print("\n--- 5. Restarting PM2 with PUBLIC_HOST=cast.homaklab.com ---", flush=True)
     run_ssh(ssh, f"cd {REMOTE_DIR} && PORT={PORT} PUBLIC_HOST=cast.homaklab.com pm2 restart cast --update-env")
     run_ssh(ssh, "pm2 save")
