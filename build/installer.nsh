@@ -1,4 +1,4 @@
-!include "nsDialogs.nsh"
+﻿!include "nsDialogs.nsh"
 !include "LogicLib.nsh"
 
 ; Network choices made on the setup page, saved to %ProgramData%\HomakCast\install.ini

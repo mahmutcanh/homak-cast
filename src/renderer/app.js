@@ -111,6 +111,7 @@
   const settingRequireApproval = document.getElementById('settingRequireApproval');
   const settingAutoStart = document.getElementById('settingAutoStart');
   const settingShowHeaderInFullscreen = document.getElementById('settingShowHeaderInFullscreen');
+  const settingMirrorAllDisplays = document.getElementById('settingMirrorAllDisplays');
   const settingFps = document.getElementById('settingFps');
   const settingStunServers = document.getElementById('settingStunServers');
   const saveSettingsBtn = document.getElementById('saveSettingsBtn');
@@ -586,6 +587,7 @@
         stream.addTrack(event.track);
       }
       videoEl.srcObject = incomingStream;
+      if (event.track.kind === 'video') relayToAllMirrors(senderId);
 
       const playVideo = () => {
         const p = videoEl.play();
@@ -636,7 +638,80 @@
     };
   }
 
+  // --- Mirror mode: relay each sender's video to the extra monitors' windows (loopback WebRTC) ---
+  const mirrorIds = new Set();
+  const mirrorRelays = new Map(); // `${mirrorId}|${senderId}` -> RTCPeerConnection
+  const relayKey = (mirrorId, senderId) => `${mirrorId}|${senderId}`;
+
+  function closeRelay(mirrorId, senderId) {
+    const pc = mirrorRelays.get(relayKey(mirrorId, senderId));
+    if (!pc) return;
+    mirrorRelays.delete(relayKey(mirrorId, senderId));
+    pc.close();
+    window.electronAPI.mirrorSend(mirrorId, { type: 'remove', senderId });
+  }
+
+  async function relayToMirror(mirrorId, senderId) {
+    const peer = activePeers.get(senderId);
+    const stream = peer && peer.videoEl && peer.videoEl.srcObject;
+    const tracks = stream ? stream.getVideoTracks() : [];
+    if (!tracks.length) return;
+    closeRelay(mirrorId, senderId);
+
+    const pc = new RTCPeerConnection({ iceServers: [] });
+    mirrorRelays.set(relayKey(mirrorId, senderId), pc);
+    tracks.forEach((track) => pc.addTrack(track, stream));
+    pc.onicecandidate = (event) => {
+      if (event.candidate) window.electronAPI.mirrorSend(mirrorId, { type: 'candidate', senderId, candidate: event.candidate.toJSON() });
+    };
+    try {
+      await pc.setLocalDescription(await pc.createOffer());
+      window.electronAPI.mirrorSend(mirrorId, { type: 'offer', senderId, sdp: pc.localDescription.sdp });
+    } catch (err) {
+      console.warn('[Mirror] relay offer failed:', err);
+      closeRelay(mirrorId, senderId);
+    }
+  }
+
+  function relayToAllMirrors(senderId) {
+    for (const mirrorId of mirrorIds) relayToMirror(mirrorId, senderId);
+  }
+
+  function closeRelaysFor(senderId) {
+    for (const mirrorId of mirrorIds) closeRelay(mirrorId, senderId);
+  }
+
+  if (window.electronAPI.onMirrorReady) {
+    window.electronAPI.onMirrorReady((mirrorId) => {
+      mirrorIds.add(mirrorId);
+      for (const senderId of activePeers.keys()) relayToMirror(mirrorId, senderId);
+    });
+    window.electronAPI.onMirrorGone((mirrorId) => {
+      mirrorIds.delete(mirrorId);
+      for (const key of [...mirrorRelays.keys()]) {
+        if (key.startsWith(`${mirrorId}|`)) {
+          mirrorRelays.get(key).close();
+          mirrorRelays.delete(key);
+        }
+      }
+    });
+    window.electronAPI.onMirrorSignal(async ({ mirrorId, msg }) => {
+      const pc = mirrorRelays.get(relayKey(mirrorId, msg && msg.senderId));
+      if (!pc) return;
+      try {
+        if (msg.type === 'answer' && typeof msg.sdp === 'string') {
+          await pc.setRemoteDescription({ type: 'answer', sdp: msg.sdp });
+        } else if (msg.type === 'candidate' && msg.candidate) {
+          await pc.addIceCandidate(msg.candidate);
+        }
+      } catch (err) {
+        console.warn('[Mirror] signal error:', err);
+      }
+    });
+  }
+
   function removeSenderTile(senderId) {
+    closeRelaysFor(senderId);
     const peer = activePeers.get(senderId);
     if (peer) {
       if (peer.pc) peer.pc.close();
@@ -690,6 +765,7 @@
 
   async function switchToStreamingView() {
     isStreamingState = true;
+    if (window.electronAPI.mirrorActive) window.electronAPI.mirrorActive(true);
     standbyView.style.display = 'none';
     desktopSenderView.style.display = 'none';
     streamingView.style.display = 'flex';
@@ -710,6 +786,8 @@
 
   async function returnToStandbyView() {
     isStreamingState = false;
+    if (window.electronAPI.mirrorActive) window.electronAPI.mirrorActive(false);
+    for (const senderId of activePeers.keys()) closeRelaysFor(senderId);
 
     // Stop recording if active
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
@@ -1222,6 +1300,7 @@
     settingRequireApproval.checked = !!currentSettings.requireApproval;
     settingAutoStart.checked = !!currentSettings.autoStartOnBoot;
     settingShowHeaderInFullscreen.checked = !!currentSettings.showHeaderInFullscreen;
+    settingMirrorAllDisplays.checked = !!currentSettings.mirrorAllDisplays;
     settingFps.value = currentSettings.defaultFps || 60;
 
     const stuns = (currentSettings.stunServers || []).map(s => s.urls).join('\n');
@@ -1253,13 +1332,16 @@
       signalingServerUrl: settingSignalingUrl.value.trim(),
       companyName: newCompany,
       deviceName: newDeviceName,
-      port: parseInt(settingPort.value, 10) || 80,
       requireApproval: settingRequireApproval.checked,
       autoStartOnBoot: settingAutoStart.checked,
       showHeaderInFullscreen: settingShowHeaderInFullscreen.checked,
+      mirrorAllDisplays: settingMirrorAllDisplays.checked,
       defaultFps: parseInt(settingFps.value, 10) || 60,
       stunServers: stunLines
     };
+
+    const typedPort = parseInt(settingPort.value, 10);
+    if (typedPort && typedPort !== currentSettings.port) updated.port = typedPort;
 
     currentSettings = await window.electronAPI.saveSettings(updated);
     if (currentSettings.signalingServerUrl) {

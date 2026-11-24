@@ -61,6 +61,7 @@ const defaultConfig = {
   companyName: DEFAULT_COMPANY_NAME, // shown in window title, tray and UI header (set in receiver settings)
   port: 80, // plain http; the installer lets the admin pick another port (falls back to 5240 if busy)
   httpsPort: 443, // LAN HTTPS (self-signed) so phones get a secure context for screen capture (falls back to 5241)
+  mirrorAllDisplays: false, // show the same stream full screen on every other monitor too
   lanDomain: '', // optional name for this PC on the LAN; shown instead of the IP and added to the certificate
   signalingServerUrl: '', // empty = built-in default relay
   deviceName: 'Cast Receiver',

@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleAutoStart: (enabled) => ipcRenderer.invoke('toggle-auto-start', enabled),
   saveRecording: (data) => ipcRenderer.invoke('save-recording', data),
   openRecordingsFolder: () => ipcRenderer.invoke('open-recordings-folder'),
+  mirrorActive: (active) => ipcRenderer.send('mirror-active', !!active),
+  mirrorSend: (mirrorId, msg) => ipcRenderer.send('mirror-to-mirror', { mirrorId, msg }),
   
   // Event listeners
   onDisplaysUpdated: (callback) => {
@@ -39,6 +41,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = () => callback();
     ipcRenderer.on('open-settings-modal', handler);
     return () => ipcRenderer.removeListener('open-settings-modal', handler);
+  },
+  onMirrorReady: (callback) => {
+    const handler = (event, mirrorId) => callback(mirrorId);
+    ipcRenderer.on('mirror-ready', handler);
+    return () => ipcRenderer.removeListener('mirror-ready', handler);
+  },
+  onMirrorGone: (callback) => {
+    const handler = (event, mirrorId) => callback(mirrorId);
+    ipcRenderer.on('mirror-gone', handler);
+    return () => ipcRenderer.removeListener('mirror-gone', handler);
+  },
+  onMirrorSignal: (callback) => {
+    const handler = (event, payload) => callback(payload);
+    ipcRenderer.on('mirror-signal', handler);
+    return () => ipcRenderer.removeListener('mirror-signal', handler);
   },
   onFullscreenChanged: (callback) => {
     const handler = (event, isFull) => callback(isFull);

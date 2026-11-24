@@ -112,6 +112,7 @@ function applyDisplaySetting() {
     mainWindow.setBounds(bounds);
     mainWindow.setFullScreen(true);
   }
+  syncMirrorWindows();
 }
 
 function getFormattedDisplays() {
@@ -264,7 +265,109 @@ function moveToDisplay(displayId, fullscreen = false) {
 
   updateTrayMenu();
   mainWindow.webContents.send('displays-updated', getFormattedDisplays());
+  syncMirrorWindows();
 }
+
+// --- Mirror mode: the same stream full screen on every other monitor ---
+const mirrorWindows = new Map(); // displayId -> BrowserWindow
+let mirrorStreaming = false;
+
+function sendToMainWindow(channel, payload) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+}
+
+function mirrorIdOf(webContents) {
+  for (const [id, win] of mirrorWindows) {
+    if (!win.isDestroyed() && win.webContents === webContents) return id;
+  }
+  return null;
+}
+
+function createMirrorWindow(display) {
+  const win = new BrowserWindow({
+    x: display.bounds.x,
+    y: display.bounds.y,
+    width: display.bounds.width,
+    height: display.bounds.height,
+    show: false,
+    frame: false,
+    skipTaskbar: true,
+    backgroundColor: '#000000',
+    webPreferences: {
+      preload: path.join(__dirname, 'mirror-preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      backgroundThrottling: false
+    }
+  });
+  win.setMenu(null);
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  win.webContents.on('will-navigate', (event) => event.preventDefault());
+  win.on('closed', () => {
+    mirrorWindows.delete(display.id);
+    sendToMainWindow('mirror-gone', display.id);
+  });
+  win.loadFile(path.join(__dirname, 'src', 'renderer', 'mirror.html'));
+  mirrorWindows.set(display.id, win);
+}
+
+function applyMirrorVisibility() {
+  const displays = screen.getAllDisplays();
+  for (const [id, win] of mirrorWindows) {
+    const display = displays.find((d) => d.id === id);
+    if (!display || win.isDestroyed()) continue;
+    if (mirrorStreaming) {
+      win.setBounds(display.bounds);
+      win.setFullScreen(true);
+      win.showInactive();
+    } else {
+      win.hide();
+    }
+  }
+}
+
+// Creates/removes mirror windows so there is one for each monitor except the main receiver's.
+function syncMirrorWindows() {
+  const wanted = new Map();
+  if (settings.mirrorAllDisplays) {
+    for (const display of screen.getAllDisplays()) {
+      if (display.id !== currentDisplayId) wanted.set(display.id, display);
+    }
+  }
+  for (const [id, win] of [...mirrorWindows]) {
+    if (!wanted.has(id) && !win.isDestroyed()) win.destroy();
+  }
+  for (const [id, display] of wanted) {
+    if (!mirrorWindows.has(id)) createMirrorWindow(display);
+  }
+  applyMirrorVisibility();
+}
+
+ipcMain.on('mirror-active', (event, active) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) return;
+  mirrorStreaming = !!active;
+  applyMirrorVisibility();
+});
+
+// Mirror window finished loading: tell the main window so it can start relaying video to it.
+ipcMain.on('mirror-ready', (event) => {
+  const id = mirrorIdOf(event.sender);
+  if (id !== null) sendToMainWindow('mirror-ready', id);
+});
+
+// Signaling between the main window and a mirror window (loopback WebRTC), checked on both ends.
+ipcMain.on('mirror-to-mirror', (event, payload) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) return;
+  const win = mirrorWindows.get(payload && payload.mirrorId);
+  if (win && !win.isDestroyed() && payload.msg && typeof payload.msg === 'object') {
+    win.webContents.send('mirror-signal', payload.msg);
+  }
+});
+
+ipcMain.on('mirror-to-main', (event, msg) => {
+  const id = mirrorIdOf(event.sender);
+  if (id !== null && msg && typeof msg === 'object') sendToMainWindow('mirror-signal', { mirrorId: id, msg });
+});
 
 // IPC Handlers
 ipcMain.handle('get-displays', () => {
@@ -371,10 +474,12 @@ ipcMain.handle('save-settings', (event, newSettings) => {
   // Admin data and license only change through the admin handlers; branding may be locked by the license.
   const { adminPasswordHash, license, ...rest } = newSettings || {};
   if (brandingLocked()) delete rest.companyName;
+  const saved = saveSettings(rest);
   if (saved) {
     settings = saved;
     if (mainWindow) mainWindow.setTitle(windowTitle());
     if (tray) tray.setToolTip(trayTooltip());
+    syncMirrorWindows();
   }
   const { adminPasswordHash: _hash, ...safeSettings } = settings;
   return safeSettings;
@@ -502,6 +607,7 @@ function registerScreenEvents() {
     if (mainWindow) {
       mainWindow.webContents.send('displays-updated', getFormattedDisplays());
     }
+    syncMirrorWindows();
   };
 
   screen.on('display-added', onScreenChange);
