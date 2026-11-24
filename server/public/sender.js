@@ -2,7 +2,8 @@
   // Camera/screen capture only exists in a secure context. Opened over plain http on the LAN,
   // navigator.mediaDevices is undefined, so move to the https listener (same host and port).
   if (!window.isSecureContext && location.protocol === 'http:' && !/^(localhost|127\.)/.test(location.hostname)) {
-    location.replace('https://' + location.host + location.pathname + location.search + location.hash);
+    // Explicit port: every listener answers both http and https, even when 443 itself is not available.
+    location.replace('https://' + location.hostname + ':' + (location.port || '80') + location.pathname + location.search + location.hash);
     return;
   }
 

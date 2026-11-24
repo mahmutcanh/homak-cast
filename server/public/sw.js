@@ -1,4 +1,4 @@
-const CACHE_NAME = 'homak-cast-v7';
+const CACHE_NAME = 'homak-cast-v8';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
