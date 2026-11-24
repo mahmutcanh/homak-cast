@@ -5,6 +5,8 @@ const { Server } = require('socket.io');
 const path = require('path');
 const QRCode = require('qrcode');
 const { loadSettings, saveSettings, getNetworkAddresses } = require('./config');
+
+const FALLBACK_PORTS = { http: 5240, https: 5241 };
 const crypto = require('crypto');
 const { buildTurnServers } = require('./turn');
 const { loadOrCreateCert, currentIps } = require('./tls');
@@ -100,9 +102,6 @@ class SignalingServer {
     this.httpsPort = options.httpsPort || process.env.HTTPS_PORT || null;
     this.httpsServer = null;
     this.dualListeners = [];
-    // LAN mode also tries 80/443 so the receiver address needs no port; skipped silently if taken.
-    this.extraPorts = options.extraPorts || [80, 443];
-    this.extraListening = [];
     this.certIps = [];
     this.certTimer = null;
     this.publicHost = options.publicHost || process.env.PUBLIC_HOST || 'cast.homaklab.com';
@@ -376,8 +375,6 @@ class SignalingServer {
         domain: this.publicHost,
         port: this.port,
         httpsPort: this.httpsServer ? Number(this.httpsPort) : null,
-        // Standard web ports that were free on this PC (http:// and https:// both work on each)
-        webPorts: [...this.extraListening],
         addresses,
         receiverOnline: this.receiversByPin.size > 0,
         totalReceivers: this.receiversByPin.size,
@@ -876,18 +873,20 @@ class SignalingServer {
     });
   }
 
-  async listenExtraPorts(host, taken) {
-    for (const port of this.extraPorts) {
-      if (taken.has(port)) continue;
-      const listener = createDualListener(this.server, this.httpsServer);
-      try {
+  // Opens one dual (http + https) listener per port. All-or-nothing: on failure nothing stays bound.
+  async listenAll(ports, host) {
+    const opened = [];
+    try {
+      for (const port of ports) {
+        const listener = createDualListener(this.server, this.httpsServer);
         await this.listenOn(listener, port, host);
-        this.dualListeners.push(listener);
-        this.extraListening.push(port);
-      } catch (err) {
-        console.warn(`[HomakCast] Port ${port} unavailable (${err.code || err.message}), skipping.`);
+        opened.push(listener);
       }
+    } catch (err) {
+      await Promise.all(opened.map((l) => new Promise((resolve) => l.close(resolve))));
+      throw err;
     }
+    this.dualListeners.push(...opened);
   }
 
   // The certificate lists the PC's IPs. When a network card or Wi-Fi/Ethernet changes, issue a new one
@@ -915,13 +914,16 @@ class SignalingServer {
 
     if (this.httpsServer) {
       // LAN mode: both ports answer http:// and https:// so the address works whichever scheme is typed.
-      const ports = new Set([Number(this.port), Number(this.httpsPort)]);
-      for (const port of ports) {
-        const listener = createDualListener(this.server, this.httpsServer);
-        this.dualListeners.push(listener);
-        await this.listenOn(listener, port, host);
+      try {
+        await this.listenAll(new Set([Number(this.port), Number(this.httpsPort)]), host);
+      } catch (err) {
+        // Chosen ports busy (IIS on 80, no rights, ...): fall back so the receiver still opens.
+        if (Number(this.port) === FALLBACK_PORTS.http && Number(this.httpsPort) === FALLBACK_PORTS.https) throw err;
+        console.warn(`[HomakCast] Ports ${this.port}/${this.httpsPort} unavailable (${err.code || err.message}); using ${FALLBACK_PORTS.http}/${FALLBACK_PORTS.https}.`);
+        this.port = FALLBACK_PORTS.http;
+        this.httpsPort = FALLBACK_PORTS.https;
+        await this.listenAll(new Set([this.port, this.httpsPort]), host);
       }
-      await this.listenExtraPorts(host, ports);
       this.watchNetworkChanges();
     } else {
       await this.listenOn(this.server, this.port, host);
@@ -944,7 +946,6 @@ class SignalingServer {
       srv.close(() => resolve());
     });
     if (this.certTimer) clearInterval(this.certTimer);
-    this.extraListening = [];
     return new Promise((resolve) => {
       this.io.close(async () => {
         await Promise.all(this.dualListeners.map(closeServer));

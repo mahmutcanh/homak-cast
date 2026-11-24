@@ -168,7 +168,7 @@
   }
 
   function signalingUrlFor(mode) {
-    if (mode === 'lan') return `http://localhost:${currentSettings.port || 5240}`;
+    if (mode === 'lan') return `http://localhost:${currentSettings.port || 80}`;
     return currentSettings.signalingServerUrl || 'https://cast.homaklab.com';
   }
 
@@ -285,7 +285,7 @@
     if (!currentPin) return;
     if (activeAddressMode === 'lan' && !lanBaseUrl) return; // wait for LAN address detection
 
-    const port = currentSettings.port || 5240;
+    const port = currentSettings.port || 80;
     cloudBaseUrl = 'https://cast.homaklab.com';
     let targetBaseUrl = 'https://cast.homaklab.com';
     if (activeAddressMode === 'lan' && lanBaseUrl) {
@@ -294,7 +294,7 @@
     targetBaseUrl = targetBaseUrl.replace(/\/+$/, '');
     const cleanHost = getCleanHost(targetBaseUrl);
     // LAN: the QR is an https URL for browsers; "hp" tells the Android app which plain-HTTP port to use.
-    const httpPortHint = activeAddressMode === 'lan' ? `&hp=${currentSettings.port || 5240}` : '';
+    const httpPortHint = activeAddressMode === 'lan' ? `&hp=${currentSettings.port || 80}` : '';
     activeConnectUrl = `${targetBaseUrl}/?code=${currentPin}${httpPortHint}`;
 
     // Cloud domain is intentionally not shown on screen; the LAN address stays visible.
@@ -332,7 +332,7 @@
   async function setupLanAddressInfo() {
     try {
       const addresses = await window.electronAPI.getNetworkAddresses();
-      const port = currentSettings.port || 5240;
+      const port = currentSettings.port || 80;
       // Every real network card (Ethernet + Wi-Fi, ...) gets its own address; VM/VPN adapters are skipped.
       let lanList = addresses.filter(a => a.isLan);
       if (!lanList.length) lanList = addresses.filter(a => a.isLocal);
@@ -341,22 +341,21 @@
 
       // Prefer the HTTPS listener: phones only allow screen capture in a secure context.
       let httpsPort = null;
-      let webPorts = [];
       try {
         const status = await fetch(`http://localhost:${port}/api/status`).then(r => r.json());
         httpsPort = status && status.httpsPort;
-        webPorts = (status && status.webPorts) || [];
       } catch (e) {
         console.warn('Could not read local server status:', e);
       }
 
-      const urlFor = (ip) => {
-        if (webPorts.includes(443)) return `https://${ip}`;
-        if (httpsPort) return `https://${ip}:${httpsPort}`;
-        if (webPorts.includes(80)) return `http://${ip}`;
-        return `http://${ip}:${port}`;
+      // Default ports (443 for https, 80 for http) are left out of the address.
+      const urlFor = (host) => {
+        if (httpsPort) return `https://${host}${httpsPort === 443 ? '' : ':' + httpsPort}`;
+        return `http://${host}${port === 80 ? '' : ':' + port}`;
       };
-      const urls = lanList.map(a => urlFor(a.address));
+      // Domain entered in the installer comes first, then one address per network card.
+      const hosts = [...(currentSettings.lanDomain ? [currentSettings.lanDomain] : []), ...lanList.map(a => a.address)];
+      const urls = hosts.map(urlFor);
       const signature = urls.join('|');
       if (signature === lastLanSignature) return; // network unchanged: leave QR and text alone
       lastLanSignature = signature;
@@ -1219,7 +1218,7 @@
     const savedRelay = currentSettings.signalingServerUrl || '';
     settingSignalingUrl.value = /^https?:\/\/cast\.homaklab\.com\/?$/i.test(savedRelay) ? '' : savedRelay;
     settingDeviceName.value = currentSettings.deviceName || 'Cast Receiver';
-    settingPort.value = currentSettings.port || 5240;
+    settingPort.value = currentSettings.port || 80;
     settingRequireApproval.checked = !!currentSettings.requireApproval;
     settingAutoStart.checked = !!currentSettings.autoStartOnBoot;
     settingShowHeaderInFullscreen.checked = !!currentSettings.showHeaderInFullscreen;
@@ -1254,7 +1253,7 @@
       signalingServerUrl: settingSignalingUrl.value.trim(),
       companyName: newCompany,
       deviceName: newDeviceName,
-      port: parseInt(settingPort.value, 10) || 5240,
+      port: parseInt(settingPort.value, 10) || 80,
       requireApproval: settingRequireApproval.checked,
       autoStartOnBoot: settingAutoStart.checked,
       showHeaderInFullscreen: settingShowHeaderInFullscreen.checked,

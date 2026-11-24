@@ -359,6 +359,11 @@ ipcMain.handle('admin-save-license', (event, { license, newPassword } = {}) => {
 ipcMain.handle('get-settings', () => {
   // The password hash never leaves the main process.
   const { adminPasswordHash, ...safe } = loadSettings();
+  // Report the ports the server really bound (it falls back to 5240/5241 when the chosen ones are busy).
+  if (signalingServer) {
+    safe.port = Number(signalingServer.port);
+    safe.httpsPort = signalingServer.httpsServer ? Number(signalingServer.httpsPort) : null;
+  }
   return safe;
 });
 
@@ -530,8 +535,8 @@ app.whenReady().then(async () => {
 
   // 1. Start embedded Signaling & Web Sender Server
   signalingServer = new SignalingServer({
-    port: settings.port || 5240,
-    httpsPort: settings.httpsPort || 5241,
+    port: settings.port || 80,
+    httpsPort: settings.httpsPort || 443,
     getLicense: () => settings.license
   });
   try {

@@ -15,6 +15,34 @@ if (!fs.existsSync(APPDATA_DIR)) {
 }
 
 const SETTINGS_FILE = path.join(APPDATA_DIR, 'settings.json');
+// Written by the Windows installer: the ports (and optional domain) the admin picked during setup.
+const INSTALL_FILE = process.env.ProgramData
+  ? path.join(process.env.ProgramData, 'HomakCast', 'install.ini')
+  : null;
+const HOSTNAME_RE = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/i;
+
+/** Values chosen in the installer (port, httpsPort, lanDomain); invalid or missing entries are left out. */
+function readInstallConfig(file = INSTALL_FILE, settingsFile = SETTINGS_FILE) {
+  const out = {};
+  try {
+    if (!file || !fs.existsSync(file)) return out;
+    // Whichever was changed last wins: re-running setup, or editing the ports in the settings screen.
+    if (fs.existsSync(settingsFile) && fs.statSync(settingsFile).mtimeMs > fs.statSync(file).mtimeMs) return out;
+    const values = {};
+    for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+      const m = /^\s*(\w+)\s*=\s*(.*?)\s*$/.exec(line);
+      if (m) values[m[1].toLowerCase()] = m[2];
+    }
+    const validPort = (v) => /^\d{1,5}$/.test(v || '') && Number(v) >= 1 && Number(v) <= 65535;
+    if (validPort(values.httpport)) out.port = Number(values.httpport);
+    if (validPort(values.httpsport)) out.httpsPort = Number(values.httpsport);
+    if (out.port && out.port === out.httpsPort) delete out.httpsPort;
+    if (values.domain && HOSTNAME_RE.test(values.domain)) out.lanDomain = values.domain.toLowerCase();
+  } catch (e) {
+    console.error('Error reading install config:', e);
+  }
+  return out;
+}
 const { defaultLicense, normalizeLicense } = require('./license');
 
 const DEFAULT_COMPANY_NAME = 'Cast';
@@ -31,8 +59,9 @@ const defaultConfig = {
   adminPasswordHash: '', // scrypt hash of the local admin password; empty = not set yet
   license: { ...defaultLicense }, // holder / expiry / device limit / branding lock (edited in the admin screen)
   companyName: DEFAULT_COMPANY_NAME, // shown in window title, tray and UI header (set in receiver settings)
-  port: 5240,
-  httpsPort: 5241, // LAN HTTPS (self-signed) so phones get a secure context for screen capture
+  port: 80, // plain http; the installer lets the admin pick another port (falls back to 5240 if busy)
+  httpsPort: 443, // LAN HTTPS (self-signed) so phones get a secure context for screen capture (falls back to 5241)
+  lanDomain: '', // optional name for this PC on the LAN; shown instead of the IP and added to the certificate
   signalingServerUrl: '', // empty = built-in default relay
   deviceName: 'Cast Receiver',
   preferredMode: 'lan', // 'lan' = this PC is the server (default), 'cloud' = cast.homaklab.com
@@ -57,14 +86,15 @@ function loadSettings() {
   try {
     if (fs.existsSync(SETTINGS_FILE)) {
       const data = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
-      const loaded = { ...defaultConfig, ...data };
+      // Installer choices win over the saved file unless the settings screen was used after setup.
+      const loaded = { ...defaultConfig, ...data, ...readInstallConfig() };
       loaded.license = normalizeLicense(loaded.license);
       return loaded;
     }
   } catch (err) {
     console.error('Error reading settings file:', err);
   }
-  return { ...defaultConfig };
+  return { ...defaultConfig, ...readInstallConfig() };
 }
 
 function saveSettings(newSettings) {
@@ -116,5 +146,6 @@ module.exports = {
   normalizeCompanyName,
   loadSettings,
   saveSettings,
+  readInstallConfig,
   getNetworkAddresses
 };

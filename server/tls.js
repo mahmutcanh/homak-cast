@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const selfsigned = require('selfsigned');
-const { APPDATA_DIR, getNetworkAddresses } = require('./config');
+const { APPDATA_DIR, getNetworkAddresses, loadSettings } = require('./config');
 
 const CERT_DIR = path.join(APPDATA_DIR, 'tls');
 const VALID_DAYS = 825;
@@ -14,10 +14,16 @@ function currentIps() {
   return [...ips].sort();
 }
 
-function readExisting(dir, ips, now) {
+/** Optional LAN domain chosen in the installer; it goes into the certificate next to the IPs. */
+function currentNames() {
+  const domain = loadSettings().lanDomain;
+  return domain ? [domain] : [];
+}
+
+function readExisting(dir, ips, names, now) {
   try {
     const meta = JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8'));
-    const covered = ips.every((ip) => meta.ips.includes(ip));
+    const covered = ips.every((ip) => meta.ips.includes(ip)) && names.every((n) => (meta.names || []).includes(n));
     if (!covered || meta.notAfter - now < RENEW_BEFORE_MS) return null;
     return {
       key: fs.readFileSync(path.join(dir, 'key.pem'), 'utf8'),
@@ -35,13 +41,14 @@ function readExisting(dir, ips, now) {
  * The private key never leaves this machine and is not shared between installs.
  * The cert is reused until the machine gets an IP the cert does not cover, or it nears expiry.
  */
-async function loadOrCreateCert(dir = CERT_DIR, ips = currentIps(), now = Date.now()) {
-  const existing = readExisting(dir, ips, now);
+async function loadOrCreateCert(dir = CERT_DIR, ips = currentIps(), now = Date.now(), names = currentNames()) {
+  const existing = readExisting(dir, ips, names, now);
   if (existing) return existing;
 
   const notAfter = new Date(now + VALID_DAYS * 24 * 60 * 60 * 1000);
   const altNames = [
     { type: 2, value: 'localhost' },
+    ...names.map((value) => ({ type: 2, value })),
     ...ips.map((ip) => ({ type: 7, ip })),
     { type: 7, ip: '::1' }
   ];
@@ -64,10 +71,10 @@ async function loadOrCreateCert(dir = CERT_DIR, ips = currentIps(), now = Date.n
   const fingerprint = pems.fingerprint || crypto.createHash('sha256').update(pems.cert).digest('hex');
   fs.writeFileSync(
     path.join(dir, 'meta.json'),
-    JSON.stringify({ ips, notAfter: notAfter.getTime(), fingerprint }),
+    JSON.stringify({ ips, names, notAfter: notAfter.getTime(), fingerprint }),
     'utf8'
   );
   return { key: pems.private, cert: pems.cert, fingerprint };
 }
 
-module.exports = { loadOrCreateCert, currentIps };
+module.exports = { loadOrCreateCert, currentIps, currentNames };
