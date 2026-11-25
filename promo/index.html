@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>HOMAK CAST - Tanıtım</title>
+<style>
+  :root { --navy:#0b1f3a; --blue:#1f6feb; --sky:#e8f1ff; --ink:#14233b; --mute:#5b6b82; --line:#d5deeb; --ok:#12a150; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: #f6f9fe; font-family: 'Segoe UI', Arial, sans-serif; color: var(--ink); }
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden;
+    background: radial-gradient(1200px 700px at 85% -10%, #dbe9ff 0%, transparent 60%), radial-gradient(900px 600px at -5% 110%, #e3efff 0%, transparent 55%), #f6f9fe; }
+  .grid { position:absolute; inset:0; background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px); background-size: 80px 80px; opacity:.35; mask-image: radial-gradient(circle at 50% 50%, #000 0%, transparent 75%); }
+  .scene { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; opacity:0; }
+  .a { opacity:0; will-change: transform, opacity; }
+  h1 { font-size: 150px; font-weight: 800; letter-spacing: 6px; color: var(--navy); }
+  h1 b { color: var(--blue); }
+  h2 { font-size: 72px; font-weight: 800; color: var(--navy); text-align:center; }
+  h2 em { font-style: normal; color: var(--blue); }
+  .sub { font-size: 38px; color: var(--mute); margin-top: 22px; text-align:center; }
+  .tag { display:inline-block; font-size:26px; font-weight:600; color:var(--blue); background:var(--sky); border:1px solid #bcd3fb; padding:10px 26px; border-radius:40px; letter-spacing:1px; }
+  .logo { width:150px; height:150px; border-radius:36px; background: linear-gradient(135deg,#1f6feb,#0b3d91); display:flex; align-items:center; justify-content:center; box-shadow:0 24px 60px rgba(31,111,235,.35); margin-bottom:34px; }
+  .row { display:flex; gap:40px; align-items:center; justify-content:center; }
+  .card { width: 400px; height: 330px; background:#fff; border:1px solid var(--line); border-radius:28px; padding:36px; box-shadow:0 18px 50px rgba(11,31,58,.08); }
+  .card .ic { width:84px; height:84px; border-radius:22px; background:var(--sky); display:flex; align-items:center; justify-content:center; font-size:44px; margin-bottom:24px; }
+  .card h3 { font-size:36px; font-weight:700; color:var(--navy); margin-bottom:10px; }
+  .card p { font-size:26px; color:var(--mute); line-height:1.35; }
+  .monitor { position:absolute; background:#0e1a2e; border:10px solid #1c2f4d; border-radius:18px; box-shadow:0 20px 50px rgba(11,31,58,.25); overflow:hidden; }
+  .monitor .scr { position:absolute; inset:0; background: linear-gradient(135deg,#1f6feb,#0b3d91); display:flex; align-items:center; justify-content:center; }
+  .stand { position:absolute; background:#1c2f4d; border-radius:6px; }
+  .phone { position:absolute; width:190px; height:380px; border-radius:36px; background:#0e1a2e; border:8px solid #1c2f4d; box-shadow:0 20px 50px rgba(11,31,58,.25); overflow:hidden; }
+  .phone .scr { position:absolute; inset:0; background: linear-gradient(160deg,#4f9bff,#1f6feb); display:flex; align-items:center; justify-content:center; }
+  .code { font-size:130px; font-weight:800; letter-spacing:14px; color:var(--navy); font-variant-numeric: tabular-nums; }
+  .qr { width:250px; height:250px; background:#fff; border:1px solid var(--line); border-radius:22px; padding:18px; box-shadow:0 14px 40px rgba(11,31,58,.1); }
+  .chips { display:flex; gap:18px; flex-wrap:wrap; justify-content:center; max-width:1300px; }
+  .chip { font-size:32px; font-weight:600; padding:16px 34px; border-radius:60px; background:#fff; border:1px solid var(--line); color:var(--navy); box-shadow:0 8px 24px rgba(11,31,58,.06); }
+  .chip.hl { background:var(--blue); color:#fff; border-color:var(--blue); }
+  .gh { display:flex; align-items:center; gap:28px; background:var(--navy); color:#fff; padding:34px 64px; border-radius:30px; box-shadow:0 24px 60px rgba(11,31,58,.35); }
+  .gh span { font-size:60px; font-weight:700; letter-spacing:1px; }
+  .bar { position:absolute; left:0; bottom:0; height:8px; background:var(--blue); }
+  .foot { position:absolute; bottom:34px; left:60px; font-size:24px; color:var(--mute); letter-spacing:2px; font-weight:600; }
+  .check { color:var(--ok); font-weight:800; margin-right:14px; }
+  .list { font-size:40px; line-height:1.9; font-weight:600; color:var(--navy); }
+  .list div { display:flex; align-items:center; }
+  .num { font-size:200px; font-weight:800; color:var(--blue); line-height:1; }
+  svg { overflow: visible; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="grid"></div>
+
+  <!-- 1: Açılış -->
+  <div class="scene" data-start="0" data-end="5.6">
+    <div class="logo a" data-fx="scale" data-s="0.2" data-d="0.8" data-sfx="whoosh">
+      <svg width="86" height="86" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><path d="M2 12a9 9 0 0 1 8 8"/><path d="M2 16a5 5 0 0 1 4 4"/><line x1="2" y1="20" x2="2.01" y2="20"/></svg>
+    </div>
+    <h1 class="a" data-fx="up" data-s="0.8" data-d="0.8" data-sfx="pop">HOMAK <b>CAST</b></h1>
+    <div class="sub a" data-fx="up" data-s="1.6" data-d="0.8">Kablosuz ekran yansıtma çözümü</div>
+    <div class="a" data-fx="up" data-s="2.6" data-d="0.8" data-sfx="tick" style="margin-top:44px"><span class="tag">VIBE CODING İLE GELİŞTİRİLDİ</span></div>
+  </div>
+
+  <!-- 2: Eşleştirme -->
+  <div class="scene" data-start="5.6" data-end="13.2">
+    <h2 class="a" data-fx="up" data-s="0.1" data-d="0.7" data-sfx="whoosh">Kodu gir. <em>Yayın başlasın.</em></h2>
+    <div class="row" style="margin-top:70px; gap:90px">
+      <div class="a" data-fx="left" data-s="0.9" data-d="0.8" data-sfx="pop" style="position:relative;width:260px;height:400px">
+        <div class="phone" style="left:30px;top:0"><div class="scr"><svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div></div>
+      </div>
+      <div class="a" data-fx="scale" data-s="1.8" data-d="0.7" data-sfx="pop" style="text-align:center">
+        <div style="font-size:28px;color:var(--mute);letter-spacing:3px;font-weight:600;margin-bottom:10px">EŞLEŞTİRME KODU</div>
+        <div class="code" id="codeText">000 000</div>
+      </div>
+      <div class="a" data-fx="right" data-s="2.6" data-d="0.8" data-sfx="pop"><div class="qr" id="qr"></div></div>
+    </div>
+    <div class="sub a" data-fx="up" data-s="3.8" data-d="0.8" style="margin-top:60px">Uygulama kurmadan, tarayıcıdan bağlan &middot; kod tek kullanımlık</div>
+  </div>
+
+  <!-- 3: Özellikler -->
+  <div class="scene" data-start="13.2" data-end="22.2">
+    <h2 class="a" data-fx="up" data-s="0.1" data-d="0.7" data-sfx="whoosh">Her cihazdan, <em>tek dokunuşla</em></h2>
+    <div class="row" style="margin-top:70px">
+      <div class="card a" data-fx="up" data-s="1.0" data-d="0.7" data-sfx="pop"><div class="ic">🌐</div><h3>Web Gönderici</h3><p>iPhone, Android, PC. Tarayıcıdan ekran ve kamera.</p></div>
+      <div class="card a" data-fx="up" data-s="1.8" data-d="0.7" data-sfx="pop"><div class="ic">🖥️</div><h3>Windows Alıcı</h3><p>Kurulum sihirbazı, otomatik başlatma, güvenlik duvarı ayarı.</p></div>
+      <div class="card a" data-fx="up" data-s="2.6" data-d="0.7" data-sfx="pop"><div class="ic">📱</div><h3>Android Uygulama</h3><p>Arka planda da kesintisiz ekran yayını.</p></div>
+      <div class="card a" data-fx="up" data-s="3.4" data-d="0.7" data-sfx="pop"><div class="ic">⚡</div><h3>Düşük Gecikme</h3><p>WebRTC ile 60 FPS, ses dahil.</p></div>
+    </div>
+  </div>
+
+  <!-- 4: Ağ & kurulum -->
+  <div class="scene" data-start="22.2" data-end="29.8">
+    <h2 class="a" data-fx="up" data-s="0.1" data-d="0.7" data-sfx="whoosh">Kur, <em>otomatik çalışsın</em></h2>
+    <div class="list" style="margin-top:56px">
+      <div class="a" data-fx="left" data-s="1.0" data-d="0.6" data-sfx="tick"><span class="check">✓</span>Kurulumda HTTP / HTTPS portu ve alan adı seçimi (varsayılan 80 &middot; 443)</div>
+      <div class="a" data-fx="left" data-s="1.9" data-d="0.6" data-sfx="tick"><span class="check">✓</span>Otomatik SSL sertifikası, ağ değişince kendini yeniler</div>
+      <div class="a" data-fx="left" data-s="2.8" data-d="0.6" data-sfx="tick"><span class="check">✓</span>Wi-Fi ve Ethernet: tüm ağ kartlarının IP adresi listelenir</div>
+      <div class="a" data-fx="left" data-s="3.7" data-d="0.6" data-sfx="tick"><span class="check">✓</span>Güvenlik duvarı kuralları kurulumla birlikte eklenir</div>
+    </div>
+  </div>
+
+  <!-- 5: Ayna modu -->
+  <div class="scene" data-start="29.8" data-end="37.4">
+    <h2 class="a" data-fx="up" data-s="0.1" data-d="0.7" data-sfx="whoosh">Tek yayın, <em>tüm ekranlarda</em></h2>
+    <div class="a" data-fx="fade" data-s="0.6" data-d="0.6" style="position:relative;width:1500px;height:520px;margin-top:40px">
+      <div class="phone a" data-fx="scale" data-s="0.7" data-d="0.6" data-sfx="pop" style="left:20px;top:70px"><div class="scr"><div style="width:70px;height:70px;border-radius:50%;background:rgba(255,255,255,.9)"></div></div></div>
+      <svg width="1500" height="520" style="position:absolute;left:0;top:0">
+        <path class="a" data-fx="draw" data-s="1.4" data-d="0.9" d="M230 260 C 420 260, 420 80, 620 80" pathLength="1" stroke="#1f6feb" stroke-width="5" fill="none" stroke-dasharray="1" stroke-linecap="round"/>
+        <path class="a" data-fx="draw" data-s="1.6" data-d="0.9" d="M230 260 L 620 260" pathLength="1" stroke="#1f6feb" stroke-width="5" fill="none" stroke-dasharray="1" stroke-linecap="round"/>
+        <path class="a" data-fx="draw" data-s="1.8" data-d="0.9" d="M230 260 C 420 260, 420 440, 620 440" pathLength="1" stroke="#1f6feb" stroke-width="5" fill="none" stroke-dasharray="1" stroke-linecap="round"/>
+      </svg>
+      <div class="monitor a" data-fx="scale" data-s="2.0" data-d="0.6" data-sfx="pop" style="left:640px;top:0px;width:420px;height:160px"><div class="scr"></div></div>
+      <div class="monitor a" data-fx="scale" data-s="2.4" data-d="0.6" data-sfx="pop" style="left:640px;top:180px;width:420px;height:160px"><div class="scr"></div></div>
+      <div class="monitor a" data-fx="scale" data-s="2.8" data-d="0.6" data-sfx="pop" style="left:640px;top:360px;width:420px;height:160px"><div class="scr"></div></div>
+    </div>
+    <div class="sub a" data-fx="up" data-s="3.8" data-d="0.8" style="margin-top:20px">Ayna modu: bağlı tüm monitörler ve projektörler aynı görüntüyü gösterir</div>
+  </div>
+
+  <!-- 6: Teknoloji / vibe coding -->
+  <div class="scene" data-start="37.4" data-end="44.4">
+    <h2 class="a" data-fx="up" data-s="0.1" data-d="0.7" data-sfx="whoosh">Baştan sona <em>vibe coding</em></h2>
+    <div class="sub a" data-fx="up" data-s="0.8" data-d="0.7" style="margin-bottom:56px">Yapay zekâ ile birlikte tasarlandı, yazıldı, test edildi ve yayınlandı</div>
+    <div class="chips">
+      <div class="chip hl a" data-fx="scale" data-s="1.4" data-d="0.4" data-sfx="tick">Claude Code</div>
+      <div class="chip a" data-fx="scale" data-s="1.7" data-d="0.4" data-sfx="tick">Electron</div>
+      <div class="chip a" data-fx="scale" data-s="2.0" data-d="0.4" data-sfx="tick">Node.js</div>
+      <div class="chip a" data-fx="scale" data-s="2.3" data-d="0.4" data-sfx="tick">WebRTC</div>
+      <div class="chip a" data-fx="scale" data-s="2.6" data-d="0.4" data-sfx="tick">Socket.IO</div>
+      <div class="chip a" data-fx="scale" data-s="2.9" data-d="0.4" data-sfx="tick">Kotlin &middot; Android</div>
+      <div class="chip a" data-fx="scale" data-s="3.2" data-d="0.4" data-sfx="tick">NSIS Installer</div>
+      <div class="chip a" data-fx="scale" data-s="3.5" data-d="0.4" data-sfx="tick">Cloudflare &middot; coturn</div>
+    </div>
+  </div>
+
+  <!-- 7: Kapanış -->
+  <div class="scene" data-start="44.4" data-end="51.5">
+    <div class="logo a" data-fx="scale" data-s="0.1" data-d="0.7" data-sfx="whoosh" style="width:120px;height:120px;border-radius:30px;margin-bottom:26px">
+      <svg width="68" height="68" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><path d="M2 12a9 9 0 0 1 8 8"/><path d="M2 16a5 5 0 0 1 4 4"/></svg>
+    </div>
+    <h2 class="a" data-fx="up" data-s="0.5" data-d="0.7">Projeyi <em>inceleyin</em></h2>
+    <div class="gh a" data-fx="scale" data-s="1.4" data-d="0.7" data-sfx="pop" style="margin-top:52px">
+      <svg width="76" height="76" viewBox="0 0 24 24" fill="#fff"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+      <span>github.com/mahmutcanh/homak-cast</span>
+    </div>
+    <div class="sub a" data-fx="up" data-s="2.6" data-d="0.8" style="margin-top:44px">HOMAK CAST &nbsp;&middot;&nbsp; Mahmutcan Homak</div>
+    <div class="a" data-fx="up" data-s="3.4" data-d="0.8" data-sfx="chime" style="margin-top:34px"><span class="tag">#VibeCoding &nbsp; #WebRTC &nbsp; #Electron &nbsp; #OpenSource</span></div>
+  </div>
+
+  <div class="foot">HOMAK CAST</div>
+  <div class="bar" id="bar"></div>
+</div>
+
+<script>
+const DURATION = 51.5;
+const clamp = (x) => Math.min(1, Math.max(0, x));
+const ease = (x) => 1 - Math.pow(1 - x, 3);
+const scenes = [...document.querySelectorAll('.scene')].map((el) => ({
+  el, s: +el.dataset.start, e: +el.dataset.end,
+  items: [...el.querySelectorAll('.a')].map((a) => ({ a, s: +a.dataset.s, d: +a.dataset.d, fx: a.dataset.fx }))
+}));
+
+// QR benzeri desen (süs)
+(function () {
+  const n = 21, c = 11, svg = [`<svg width="214" height="214" viewBox="0 0 ${n * c} ${n * c}">`];
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const finder = (x, y) => x < 7 && y < 7 || x > n - 8 && y < 7 || x < 7 && y > n - 8;
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    let on = rnd() > 0.52;
+    if (finder(x, y)) {
+      const fx = x < 7 ? x : x - (n - 7), fy = y < 7 ? y : y - (n - 7);
+      on = fx === 0 || fx === 6 || fy === 0 || fy === 6 || (fx >= 2 && fx <= 4 && fy >= 2 && fy <= 4);
+    }
+    if (on) svg.push(`<rect x="${x * c}" y="${y * c}" width="${c}" height="${c}" fill="#0b1f3a"/>`);
+  }
+  document.getElementById('qr').innerHTML = svg.join('') + '</svg>';
+})();
+
+function render(t) {
+  for (const sc of scenes) {
+    const lt = t - sc.s;
+    const fadeIn = clamp(lt / 0.45), fadeOut = clamp((sc.e - t) / 0.45);
+    const op = Math.min(fadeIn, fadeOut);
+    sc.el.style.opacity = op;
+    sc.el.style.visibility = op > 0 ? 'visible' : 'hidden';
+    if (op <= 0) continue;
+    for (const it of sc.items) {
+      const v = ease(clamp((lt - it.s) / it.d));
+      const a = it.a;
+      a.style.opacity = it.fx === 'draw' ? (v > 0 ? 1 : 0) : v;
+      switch (it.fx) {
+        case 'up': a.style.transform = `translateY(${(1 - v) * 50}px)`; break;
+        case 'left': a.style.transform = `translateX(${(1 - v) * -90}px)`; break;
+        case 'right': a.style.transform = `translateX(${(1 - v) * 90}px)`; break;
+        case 'scale': a.style.transform = `scale(${0.6 + 0.4 * v})`; break;
+        case 'draw': a.style.strokeDashoffset = (1 - v); break;
+        default: break;
+      }
+    }
+  }
+  // eşleştirme kodu: rakamlar sırayla oturur
+  const lt2 = t - 5.6, code = '482190';
+  const lock = Math.floor(clamp((lt2 - 2.2) / 1.6) * 6);
+  let out = '';
+  for (let i = 0; i < 6; i++) {
+    out += i < lock ? code[i] : String(Math.floor((t * 23 + i * 7) % 10));
+    if (i === 2) out += ' ';
+  }
+  document.getElementById('codeText').textContent = out;
+  document.getElementById('bar').style.width = (t / DURATION * 100) + '%';
+}
+
+function collectEvents() {
+  const ev = [];
+  for (const sc of scenes) for (const it of sc.items) if (it.a.dataset.sfx) ev.push([sc.s + it.s, it.a.dataset.sfx]);
+  ev.sort((x, y) => x[0] - y[0]);
+  return ev;
+}
+render(0);
+</script>
+</body>
+</html>
