@@ -1,6 +1,6 @@
 # 📡 HOMAK CAST — Kablosuz Ekran Yansıtma
 
-> **EN:** HOMAK CAST is a wireless screen-mirroring system: a Windows receiver (Electron + built-in signaling server), a zero-install web sender for iPhone / Android / PC browsers, and an Android app. Pairing is done with a one-time 6-digit code or QR, video and audio travel over WebRTC, and one stream can be mirrored to every monitor of the receiver PC. The whole project was built with AI-assisted "vibe coding" ([Claude Code](https://claude.com/claude-code)).
+> Windows alıcı (Electron + dahili sinyal sunucusu), kurulum gerektirmeyen web gönderici (iPhone / Android / PC tarayıcısı) ve Android uygulamasından oluşan kablosuz ekran yansıtma sistemi. Eşleştirme tek kullanımlık 6 haneli kod veya QR ile yapılır, görüntü ve ses WebRTC ile taşınır, tek yayın alıcı PC'nin tüm monitörlerine yansıtılabilir. Proje baştan sona yapay zekâ destekli "vibe coding" ile ([Claude Code](https://claude.com/claude-code)) geliştirildi.
 
 **HOMAK CAST**; Windows 10/11 üzerinde çalışan alıcı (Receiver), tarayıcıdan çalışan web göndericisi (Sender) ve Android uygulamasından oluşur. Telefon, tablet veya bilgisayarın ekranını/kamerasını harici ekrana, monitöre ya da HDMI projektöre kablosuz aktarır.
 
