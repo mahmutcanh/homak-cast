@@ -1,115 +1,114 @@
-# 📡 HOMAK CAST — Windows Kablosuz Ekran & Projeksiyon Alıcısı
+# 📡 HOMAK CAST — Kablosuz Ekran Yansıtma
 
-**HOMAK CAST**, Windows 10 ve Windows 11 üzerinde çalışan, harici ekranlara ve HDMI projeksiyon cihazlarına kablosuz ekran ve ses aktarımı (Screen Mirroring / Casting) sağlayan yüksek performanslı bir masaüstü Receiver (Alıcı) ve Web Sender (Gönderici) çözümüdür.
+> **EN:** HOMAK CAST is a wireless screen-mirroring system: a Windows receiver (Electron + built-in signaling server), a zero-install web sender for iPhone / Android / PC browsers, and an Android app. Pairing is done with a one-time 6-digit code or QR, video and audio travel over WebRTC, and one stream can be mirrored to every monitor of the receiver PC. The whole project was built with AI-assisted "vibe coding" ([Claude Code](https://claude.com/claude-code)).
 
----
+**HOMAK CAST**; Windows 10/11 üzerinde çalışan alıcı (Receiver), tarayıcıdan çalışan web göndericisi (Sender) ve Android uygulamasından oluşur. Telefon, tablet veya bilgisayarın ekranını/kamerasını harici ekrana, monitöre ya da HDMI projektöre kablosuz aktarır.
 
-## 🌟 Temel Özellikler
-
-### 1. 6 Haneli Dinamik Eşleştirme Kodu & Hızlı QR Kod
-- Alıcı ekranında rastgele üretilen büyük ve okunaklı 6 haneli kod (Örn: `482 190`).
-- Gönderici cihazların (telefon, tablet veya başka bir PC) kamerasıyla okutarak saniyeler içinde bağlanabileceği dinamik QR kod.
-- Eşleştirme sağlandıktan sonra kod anında geçersiz kılınarak yabancı cihazların yayına müdahale etmesi engellenir.
-
-### 2. Yayın Kesintisinde Otomatik Yenileme
-- Gönderici yayını durdurduğunda veya bağlantı koptuğunda Receiver otomatik olarak bekleme ekranına döner.
-- Sistem anında **yeni bir 6 haneli eşleştirme kodu** ve yeni QR kod üretir.
-
-### 3. Ultra Düşük Gecikme & 60 FPS Performans
-- WebRTC tabanlı P2P ve Relay akış mimarisi.
-- 60 FPS donanım hızlandırmalı video akışı ve adaptif bitrate kontrolü.
-- Hızlı yanıt süresi ile video, sunum ve interaktif kullanım için optimize edilmiştir.
-
-### 4. Projeksiyon & Çoklu Monitör Desteği
-- Sistemdeki tüm monitörleri ve HDMI projeksiyon cihazlarını otomatik algılar.
-- Üst menüden veya sistem tepsisinden yayının hangi ekranda açılacağı seçilebilir.
-- F11 kısayolu veya arayüz butonu ile tek tıkla tam ekran (projeksiyon) moduna geçiş.
-
-### 5. Özel Ses Çıkışı Yönlendirme (Audio Sink Selection)
-- Bilgisayara bağlı ses çıkış aygıtlarını (HDMI Projeksiyon hoparlörü, harici USB ses kartı, kulaklık) otomatik listeler.
-- Gelen yayın sesinin doğrudan seçilen projeksiyon veya harici hoparlörden oynatılmasını sağlar.
-
-### 6. Gelişmiş Güvenlik & Rate Limiting
-- **Kaba Kuvvet (Brute-Force) Koruması:** Eşleştirme kodunu arka arkaya 5 kez yanlış giren IP adresleri geçici olarak engellenir.
-- **Anında Bağlantı (Varsayılan):** Doğru kodu giren cihaz onay beklemeden hemen bağlanır.
-- **Kullanıcı Onayı (Opsiyonel / Varsayılan Kapalı):** Alıcı ayarlarından açılırsa, kod girilse dahi alıcı ekranında onay penceresi ("X cihazı ekranını yansıtmak istiyor: Kabul Et / Reddet") açılır. 30 saniye içinde yanıt verilmezse otomatik reddedilir. Onay tercihi alıcı başınadır.
-
-### 7. Çapraz Ağ & VLAN / WAN Desteği
-- Farklı Subnet, farklı VLAN veya internet üzerinden bağlantı için STUN ve TURN sunucu desteği.
-- Google Public STUN sunucuları hazır konfigüre edilmiştir.
-
-### 8. Windows Sistem Tepsisi (System Tray) Entegrasyonu
-- Uygulama penceresi kapatıldığında arka planda sistem tepsisinde (System Tray) çalışmaya devam eder.
-- Tepsi Sağ Tık Menüsü:
-  - 📺 **Receiver'ı Aç**
-  - 🖥️ **Ekran / Projeksiyon Seç** (Tüm bağlı monitörler)
-  - ⚙️ **Sunucu ve Yayın Ayarları**
-  - ⏹ **Yayını Durdur**
-  - 🔄 **Yeni Kod Üret**
-  - 🚀 **Windows ile Otomatik Başlat**
-  - ❌ **Çıkış**
+🎬 **Tanıtım videosu:** [`promo/homak-cast-tanitim.mp4`](promo/homak-cast-tanitim.mp4)
 
 ---
 
-## 🚀 Kurulum ve Çalıştırma
+## ✨ Özellikler
 
-### Hazır EXE Dosyaları (`dist/`)
-Projede önceden derlenmiş 64-bit Windows yürütülebilir dosyaları mevcuttur:
-- **Klasör Modu (Unpacked):** `dist\win-unpacked\Homak Cast Receiver.exe` dosyasını çift tıklatarak hemen çalıştırabilirsiniz.
-- **Tek Dosya (Portable EXE):** `dist\Homak Cast Receiver 1.0.0.exe` kurulum gerektirmeyen taşınabilir sürümdür.
+| | |
+|---|---|
+| 🔢 **Kodla eşleştirme** | 6 haneli tek kullanımlık kod + QR. Eşleşince kod geçersiz olur, yayın kesilince yenisi üretilir. |
+| 🌐 **Kurulumsuz gönderici** | iPhone, Android veya PC tarayıcısından ekran ve kamera paylaşımı. Uygulama gerekmez. |
+| 📱 **Android uygulaması** | Arka planda da kesintisiz ekran yayını (`android/`). |
+| ⚡ **Düşük gecikme** | WebRTC, 60 FPS, ses dahil; ağ dışı bağlantılar için STUN/TURN. |
+| 🪞 **Ayna modu** | Tek yayın, receiver PC'ye bağlı tüm monitör ve projektörlerde tam ekran. |
+| 🖥️ **Çoklu monitör** | Yayının hangi ekranda açılacağı seçilir, F11 ile tam ekran. |
+| 🔊 **Ses çıkışı seçimi** | Yayın sesi seçilen hoparlöre/HDMI cihazına yönlenir. |
+| 🔒 **Otomatik HTTPS** | HTTP ve HTTPS aynı portta; kendinden imzalı sertifika makineye özel üretilir, ağ değişince yenilenir. |
+| 🌍 **Tüm ağ kartları** | Wi-Fi ve Ethernet dahil her kartın adresi listelenir, ağ değişince güncellenir. |
+| 🛡️ **Güvenlik** | 5 yanlış kodda IP geçici engellenir; isteğe bağlı kullanıcı onayı (30 sn, varsayılan kapalı). |
+| 🧰 **Kurulum sihirbazı** | HTTP/HTTPS portu ve isteğe bağlı alan adı seçilir (varsayılan **80 / 443**), güvenlik duvarı kuralları eklenir. |
+| 🧭 **Sistem tepsisi** | Pencere kapansa da arkada çalışır; yeni kod üret, yayını durdur, Windows ile başlat. |
 
-### Geliştirici Modunda Çalıştırma (Kaynak Koddan)
+---
+
+## 🚀 Hızlı Başlangıç
+
+### Kullanıcı olarak
+1. `Cast-Setup-1.0.0.exe` kurulum dosyasını alıcı PC'de çalıştırın (portable sürüm de var).
+2. Sihirbazda portları onaylayın (varsayılan 80 ve 443). İsterseniz bir alan adı girin.
+3. Receiver açılınca ekranda kod, QR ve bağlantı adresleri görünür.
+
+### Gönderen cihazdan
+1. QR kodu okutun **veya** tarayıcıya receiver ekranındaki adresi yazın (ör. `https://192.168.1.20`).
+2. Sertifika uyarısı çıkarsa devam edin (sertifika yerel olarak üretilmiştir; iPhone/Android'de kamera ve ekran paylaşımı için **HTTPS şarttır**).
+3. 6 haneli kodu girin → **Eşleştir ve Yayına Başla**.
+4. Paylaşılacak ekranı/sekmeyi veya kamerayı seçin.
+
+> Tarayıcıda ekran paylaşımı yalnızca bilgisayar tarayıcılarında desteklenir; telefonlarda web gönderici kamerayı, Android uygulaması ise ekranı yayınlar. Mobil Chrome arka plana alınınca kamerayı bıraktığı için uygulama geri dönüşte kamerayı otomatik yeniden açar.
+
+### Ayna modunu açma
+Receiver → **Ayarlar** → **“Yayını bağlı tüm ekranlara yansıt”**. Yayın sırasında diğer tüm monitörlerde siyah arka planlı tam ekran pencere açılır, yayın bitince kapanır.
+
+---
+
+## 🛠️ Geliştirici
+
 ```bash
-# Bağımlılıkları yükleyin
 npm install
-
-# Alıcı uygulamasını (Electron + Dahili Sunucu) başlatın
-npm start
+npm start          # Electron receiver + dahili sunucu
+npm run server     # yalnızca web ve sinyal sunucusu
+npm test           # entegrasyon testleri
 ```
 
-### Sadece Web & Sinyal Sunucusunu Başlatma
+Derleme (`dist/` altına çıkar):
+
 ```bash
-npm run server
+npm run build:installer   # NSIS kurulum sihirbazı
+npm run build:portable    # taşınabilir tek EXE
+npm run build             # hepsi
 ```
-Sunucu varsayılan olarak `5240` portundan başlar ve yerel ağ IP adreslerini konsola yazdırır.
 
-### Testleri Çalıştırma
-```bash
-npm test
+Android uygulaması için bkz. [`android/README.md`](android/README.md).
+
+### Mimari
+
 ```
-Tüm entegrasyon testlerini (Sinyal, PIN üretimi, Rate-limiting, WebRTC onay süreci, Kod geçersiz kılma ve Yayın kesilme döngüsü) doğrular.
-
-### Yeniden EXE Derleme
-```bash
-# Klasör paketi oluştur
-npm run build:dir
-
-# Tek parça taşınabilir (Portable) EXE oluştur
-npm run build:portable
-
-# NSIS Windows Kurulum Dosyası oluştur
-npm run build:installer
+ Telefon / PC tarayıcısı ──┐
+   (server/public)        │  WebSocket (Socket.IO) sinyal
+ Android uygulaması ──────┼─────────────────────────────►  Signaling server (Node/Express)
+                          │                                   ├─ dual-protocol HTTP+HTTPS (server/dual-protocol.js)
+                          │  WebRTC video + ses               ├─ otomatik TLS (server/tls.js)
+                          └──────────────────────────────►  Electron receiver (main.js, src/renderer)
+                                                              └─ ayna pencereleri (mirror.html, yerel WebRTC)
 ```
+
+- `main.js`, `preload.js`, `src/renderer/` — Electron alıcı
+- `server/` — sinyal sunucusu, yapılandırma, TLS, web gönderici (`server/public/`)
+- `build/installer.nsh` — kurulum sihirbazı sayfası ve güvenlik duvarı kuralları
+- `android/` — Kotlin + WebRTC uygulaması
+- `promo/` — tanıtım videosunun kaynağı (HTML sahneler + Electron ile kare üretimi)
 
 ---
 
-## 📱 Ekran Yansıtma (Sender) Nasıl Kullanılır?
+## ⚙️ Ayarlar
 
-1. Alıcı PC'de **Homak Cast Receiver** uygulamasını açın.
-2. Ekranda görüntülenen **QR kodu** telefonunuzun kamerasıyla okutun **VEYA** aynı ağdaki herhangi bir cihazın tarayıcısından `http://<ALICI_IP>:5240` adresine gidin.
-3. 6 haneli eşleştirme kodunu girin (QR ile bağlandıysanız kod otomatik girilir).
-4. **"Eşleştir ve Yayına Başla"** butonuna basın.
-5. Alıcı ekranında onay uyarısı çıkarsa **"Kabul Et"** butonuna tıklayın.
-6. Tarayıcınızın ekran paylaşımı penceresinden paylaşmak istediğiniz ekranı, pencereyi veya sekmeyi seçin (ses aktarımı için "Sistem sesini paylaş" kutucuğunu işaretleyin).
-7. Yayınınız anında 60 FPS hızında alıcı ekranda görüntülenecektir!
+Ayarlar `%APPDATA%\HomakCast\settings.json` içinde saklanır, kurulumda seçilen portlar `%ProgramData%\HomakCast\install.ini` dosyasına yazılır. Receiver'daki **Ayarlar** penceresinden:
+
+- Portlar, alıcı cihaz adı, alan adı
+- Kullanıcı onayı (açık/kapalı), Windows ile başlatma
+- Varsayılan FPS (60 / 30), ses çıkışı, ayna modu
+- STUN / TURN sunucuları
+
+Seçilen port başka bir program tarafından kullanılıyorsa uygulama otomatik olarak **5240 (HTTP) ve 5241 (HTTPS)** portlarına geçer.
 
 ---
 
-## ⚙️ Yapılandırma ve Ayarlar
-Ayarlar `%APPDATA%\HomakCast\settings.json` dosyasında saklanır ve Receiver arayüzündeki **⚙️ Ayarlar** penceresinden anlık olarak değiştirilebilir:
-- Port numarası
-- Alıcı cihaz adı
-- Kullanıcı onay zorunluluğu (Açık/Kapalı)
-- Windows ile otomatik başlatma
-- Varsayılan FPS (60 / 30)
-- STUN / TURN sunucu adresleri
+## ⚠️ Bilinen Sınırlar
+
+- Sertifika kendinden imzalıdır; tarayıcı uyarısını gidermek için gerçek bir alan adı ve Let's Encrypt gerekir.
+- Mobil tarayıcılar arka planda kamera yayınını sürdüremez; kesintisiz arka plan yayını için Android uygulaması kullanılmalıdır.
+- Ayna modu ve Android uygulaması gerçek çoklu monitör / cihaz ortamında sınırlı test edilmiştir; hata bildirimleri memnuniyetle karşılanır.
+
+---
+
+## 🤖 Nasıl Yapıldı?
+
+Proje baştan sona yapay zekâ destekli geliştirme (**vibe coding**) ile [Claude Code](https://claude.com/claude-code) kullanılarak tasarlandı, yazıldı, test edildi ve yayınlandı.
+
+**Teknolojiler:** Electron · Node.js · Express · Socket.IO · WebRTC · Kotlin · NSIS · coturn
